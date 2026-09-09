@@ -13,14 +13,15 @@ picker.
 
 > **Status:** early but playable. On a Galaxy Z Fold 7 the game boots, plays
 > through the intro and the first Bowser fight with touch controls, and saves.
-> The invisible battle damage numbers, the broken opening logos and (very
-> likely) the crash when Bowser powers up with the Star Rod all had one cause:
-> on Android the port loaded effect graphics and other DMA'd data from the
-> wrong place in the ROM (see `docs/PORTING_NOTES.md`). That is fixed and
-> awaiting confirmation on a device. The build logs every session and, after a
-> crash, offers the report on the next launch (Copy / Save to Downloads /
-> Share) — please send it if anything still crashes. The settings menu has a
-> Testing tab with quick save/load and a warp straight to that fight.
+> Two Android-only bugs have been fixed since the first device reports: the
+> port loaded effect graphics and the logos from the wrong place in the ROM,
+> and a macOS-specific "corrupt pointer" heuristic dropped every effect
+> instance (no damage numbers, no battle effects) and then made the game abort
+> when Bowser powers up with the Star Rod. See `docs/PORTING_NOTES.md`. The
+> build logs every session and, after a crash, offers the report on the next
+> launch (Copy / Save to Downloads / Share) — please send it if anything still
+> crashes. The settings menu has a Testing tab with quick save/load and a warp
+> straight to that fight.
 
 ## Legal notice
 

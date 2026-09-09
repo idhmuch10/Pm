@@ -164,6 +164,24 @@ a black band stayed along one screen edge. Changes:
   quick load anywhere, warp by area/map/entry, story-progress editor, and a
   preset that jumps straight to the intro Bowser confrontation.
 
+### Fourth round: the crash report
+
+The first report produced by the new crash dialog showed both remaining
+symptoms at once. The session log was full of
+`[render_effects_UI] CORRUPTION: gEffectInstances[0] = 0x6eb8bc3ea0 (invalid
+pointer!)` and the crash was `SIGABRT` in `remove_effect` called from the
+Star Rod script. `render_effects_UI` contained a PaperShip "diagnostic" that
+declared any effect instance pointer above `0x800000000` (32 GB) corrupt and
+nulled the array entry. That range only describes macOS user space; Android
+(and Linux x86-64) hand out addresses far above it, so every effect instance
+was dropped the frame it was created — no damage numbers, no battle effects —
+and when the owning script later called `remove_effect()` on its instance the
+lookup failed its `ASSERT`, which is the abort. A sibling heuristic in
+`sfx_update_env_sound_params` (valid range 4 GB–32 TB) was removed for the
+same reason. The ROM-offset fix from the third round was real and necessary
+(effect graphics really were loaded from the wrong place), but it could not
+show on a device while this check discarded the instances.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

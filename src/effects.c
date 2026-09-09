@@ -153,23 +153,12 @@ void render_effects_UI(void) {
     s32 cond = true;
     s32 i;
 
-#ifdef PORT
-    // Diagnostic: detect corrupted effect instance pointers
-    for (int j = 0; j < ARRAY_COUNT(gEffectInstances); j++) {
-        if (gEffectInstances[j] != nullptr) {
-            uintptr_t addr = (uintptr_t)gEffectInstances[j];
-            // Valid heap pointers on macOS are typically in 0x100000000-0x200000000 range
-            if (addr < 0x1000 || addr > 0x800000000ULL) {
-                fprintf(stderr, "[render_effects_UI] CORRUPTION: gEffectInstances[%d] = %p (invalid pointer!)\n",
-                        j, (void*)gEffectInstances[j]);
-                fprintf(stderr, "  gEffectInstances array at %p, gEffectSharedData at %p\n",
-                        (void*)gEffectInstances, (void*)gEffectSharedData);
-                fflush(stderr);
-                gEffectInstances[j] = nullptr; // Clear corrupted entry to avoid crash
-            }
-        }
-    }
-#endif
+    // PORT: a former "corruption" heuristic here rejected any instance pointer above
+    // 0x800000000 (32 GB) and nulled the entry. That range only describes macOS user
+    // space; Android and Linux hand out addresses far above it, so every effect was
+    // dropped (invisible damage numbers etc.) and the owning script's remove_effect()
+    // later failed its ASSERT. Pointer validity is not something to guess from the
+    // address value; the check is gone.
 
     for (i = 0; i < ARRAY_COUNT(gEffectInstances); i++) {
         EffectInstance* effectInstance = gEffectInstances[i];

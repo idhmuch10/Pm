@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A folded sheet of paper with a red cap: the PaperShip Mobile launcher glyph. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,26 L62,26 L76,40 L76,82 L34,82 Z" />
+    <path
+        android:fillColor="#E9E4D8"
+        android:pathData="M62,26 L62,40 L76,40 Z" />
+    <path
+        android:fillColor="#D93A2B"
+        android:pathData="M42,50 L68,50 L68,56 L42,56 Z" />
+    <path
+        android:fillColor="#D93A2B"
+        android:pathData="M42,62 L60,62 L60,68 L42,68 Z" />
+    <path
+        android:fillColor="#3B6FD9"
+        android:pathData="M42,38 L52,38 L52,44 L42,44 Z" />
+</vector>

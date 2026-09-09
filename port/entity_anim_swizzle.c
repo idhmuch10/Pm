@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "port/endian.h"
+#include "port/port_endian.h"
 
 // N64 StaticAnimatorNode layout (0x2C = 44 bytes)
 #define N64_STATIC_ANIM_NODE_SIZE 0x2C

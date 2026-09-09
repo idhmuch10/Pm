@@ -2,7 +2,7 @@
 #include "audio/core.h"
 #ifdef PORT
 #include <stdio.h>
-#include "port/endian.h"
+#include "port/port_endian.h"
 #endif
 
 BSS void (*CurrentSeqCmdHandler)(BGMPlayer*, BGMPlayerTrack*);

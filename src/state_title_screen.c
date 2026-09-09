@@ -8,7 +8,7 @@
 #include "ld_addrs.h"
 #ifdef PORT
 #include <stdio.h>
-#include "../port/endian.h"
+#include "../port/port_endian.h"
 extern void gfx_texture_cache_clear(void);
 #endif
 

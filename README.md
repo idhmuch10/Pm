@@ -1,191 +1,142 @@
-# PaperShip
+# PaperShip Mobile — Paper Mario 64 on your phone
 
-A decomp-based PC port of Paper Mario 64 using [libultraship](https://github.com/Kenix3/libultraship).
+An Android port of Paper Mario (Nintendo 64), built from the
+[Paper Mario decompilation](https://github.com/pmret/papermario) and the
+[PaperShip](https://github.com/versacepapermario/papermario-pc-upload) PC port,
+rendered with [libultraship](https://github.com/Kenix3/libultraship).
 
-Built from the [Paper Mario decompilation](https://github.com/pmret/papermario) with a custom PORT layer that bridges N64 hardware calls to modern PC graphics (Metal/OpenGL/DirectX), audio, and input via libultraship.
+The game code, PaperShip's PORT layer and libultraship are compiled with the
+Android NDK into `libPaperShip.so`, which runs inside an
+[SDL2](https://libsdl.org) activity with an on-screen N64 controller. Everything
+is read at runtime from a ROM that you import once through the system file
+picker.
 
-## Legal Notice
+> **Status:** early. The APK builds, the game boots through the same code path
+> that PaperShip's desktop build uses, and the touch controls, ROM import,
+> saves and settings menu are wired up — but this port has **not yet been
+> play-tested on real phones**. Expect rough edges and please report what you see.
 
-This project is a **clean-room PC port** built entirely from the publicly available [Paper Mario decompilation](https://github.com/pmret/papermario). It follows the same legal approach as [Ship of Harkinian](https://github.com/HarbourMasters/Shipwright) (Zelda OoT PC port) and [Ghostship](https://github.com/HarbourMasters/Ghostship) (SM64 PC port).
+## Legal notice
 
-- **This repository contains NO copyrighted Nintendo assets** — no ROM data, no textures, no audio, no models
-- All game assets are read at runtime from a user-provided ROM file
-- We do not condone piracy. You must provide your own legally obtained copy of the game.
+This repository contains **no copyrighted Nintendo assets**: no ROM data, no
+textures, no audio, no models. All game data is read at runtime from a ROM
+file that you provide. You must own a legally obtained copy of Paper Mario
+(USA). We do not condone piracy.
 
-## Features
+Only the **US release** is supported:
 
-- Native PC rendering via Metal (macOS), OpenGL, or DirectX 11 (Windows)
-- Full audio (BGM, sound effects, MSEQ sequences)
-- Controller and keyboard support with remappable controls
-- Settings menu (Escape key) with resolution scaling, MSAA, VSync, volume controls
-- Save system (file-backed flash emulation)
-- 4:3 aspect ratio with borderless fullscreen
+| Version | SHA-1 |
+|---------|-------|
+| Paper Mario (USA) | `3837f44cda784b466c9a2d99df70d77c322b97a0` |
 
-## Quick Start
+## Playing on Android
 
-### 1. Get the source code
+1. Install the APK (build it yourself, see below, or download the `PaperShipMobile-debug`
+   artifact from the *Android APK* workflow on the Actions tab).
+2. Launch **PaperShip Mobile**. On first start it asks for your ROM: pick your
+   `.z64`, `.v64` or `.n64` file (40 MB). It is converted to `.z64` byte order,
+   verified to be Paper Mario (USA) and copied into the app's private folder.
+3. Play. The on-screen pad appears automatically unless a gamepad is connected.
 
-```bash
-git clone --recursive <repo-url>
-cd papermario-pc-upload
-```
+Requirements: Android 7.0+ (API 24), a 64-bit ARM device (`arm64-v8a`) and
+OpenGL ES 3.0. Bluetooth/USB gamepads are supported through SDL.
 
-If you already cloned without `--recursive`:
-```bash
-git submodule update --init --recursive
-```
+### Controls
 
-### 2. Provide your ROM
+| On screen | N64 |
+|-----------|-----|
+| Left translucent stick | Control Stick |
+| Blue **A**, green **B** | A, B |
+| Grey **Z** | Z |
+| Yellow **C▲ C▼ C◀ C▶** | C buttons |
+| **L**, **R** (top corners) | L, R |
+| Red **START** (bottom centre) | Start |
+| Small **▲▼◀▶** (top left) | D-pad |
+| **MENU** pill / Android back button | Settings menu (graphics, audio, controller mapping) |
+| **PAD** pill | Hide / show the touch controls |
 
-You need a **US** Paper Mario ROM in `.z64` format. Place it in the project root or build directory.
+### Where your files live
 
-Accepted filenames: `Paper Mario (USA).z64`, `baserom.us.z64`, `pm64.z64`, `papermario.z64`
+`Android/data/com.papership.mobile/files/` (the app's private external storage):
 
-| Version | SHA-1 Hash |
-|---------|-----------|
-| US | `3837f44cda784b466c9a2d99df70d77c322b97a0` |
+| File | Purpose |
+|------|---------|
+| `Paper Mario (USA).z64` | Your imported ROM |
+| `papership_save.bin` | Save data (N64 flash image) |
+| `papership.cfg.json` | Settings (libultraship configuration) |
+| `papership.o2r`, `gamecontrollerdb.txt` | Copied from the APK on every launch |
+| `mods/` | Drop `.o2r` mod archives here |
+| `papership_crash.log` | Written if the game crashes |
 
-You can verify your ROM hash at https://www.romhacking.net/hash/
+## Building
 
-### 3. Build and run
+### Android
 
-#### macOS (primary tested platform)
-
-```bash
-brew install cmake sdl2 glew
-mkdir build && cd build
-cmake ..
-cmake --build . --target PaperShip -j$(sysctl -n hw.ncpu)
-cmake --build . --target GeneratePortO2R
-./PaperShip
-```
-
-#### Linux
-
-```bash
-sudo apt install cmake build-essential libsdl2-dev libpng-dev libglew-dev
-mkdir build && cd build
-cmake ..
-cmake --build . --target PaperShip -j$(nproc)
-cmake --build . --target GeneratePortO2R
-./PaperShip
-```
-
-#### Windows (Visual Studio)
-
-```bash
-mkdir build && cd build
-cmake .. -G "Visual Studio 17 2022" -A x64
-cmake --build . --target PaperShip --config Release
-cmake --build . --target GeneratePortO2R --config Release
-```
-
-#### Windows (MSYS2/MinGW)
+Requirements: JDK 17+, Android SDK (platform 35, build-tools 35), NDK
+`27.2.12479018`, CMake ≥ 3.24, git, and an internet connection for the first
+build (libultraship fetches SDL2 and its other dependencies).
 
 ```bash
-pacman -S mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 mingw-w64-x86_64-glew
-mkdir build && cd build
-cmake .. -G "MinGW Makefiles"
-cmake --build . --target PaperShip -j$(nproc)
-cmake --build . --target GeneratePortO2R
+git clone https://github.com/idhmuch10/Pm.git
+cd Pm/android
+./gradlew assembleDebug            # -> app/build/outputs/apk/debug/app-debug.apk
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The game automatically searches for the ROM in the executable's directory and parent directories. No extraction step needed.
+Or open the `android/` folder in Android Studio. See
+[docs/ANDROID.md](docs/ANDROID.md) for details, debugging tips and the emulator
+(`-PabiFilters=arm64-v8a,x86_64`).
 
-## Platform Support
+### Desktop (Linux / macOS / Windows)
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| macOS (Apple Silicon) | Fully tested | Primary development platform |
-| macOS (Intel) | Should work | Not actively tested |
-| Windows | Builds supported | Community contributions welcome for platform-specific fixes |
-| Linux | Builds supported | Community contributions welcome for platform-specific fixes |
+The desktop build is PaperShip's; it still works from this tree:
 
-## Controls
-
-### Default Keyboard
-
-| N64 | A | B | Z | Start | Analog Stick | C Buttons | D-Pad |
-|-----|---|---|---|-------|-------------|-----------|-------|
-| Keyboard | X | C | Z | Space | WASD | Arrow Keys | TFGH |
-
-### Other Shortcuts
-
-| Key | Action |
-|-----|--------|
-| Escape | Toggle settings menu |
-| F11 | Toggle fullscreen |
-
-Controllers are automatically detected. Button mapping can be configured in the settings menu.
-
-## Graphics Backends
-
-| Platform | Default Backend | Alternatives |
-|----------|----------------|-------------|
-| macOS | Metal | OpenGL |
-| Windows | DirectX 11 | OpenGL |
-| Linux | OpenGL | — |
-
-## Current Status
-
-This port has been **playtested through Chapter 2** (through the Tutankoopa boss fight). The game is largely playable from start through that point, but there are still visual artifacts and bugs. Chapters beyond Chapter 2 have not been tested and may have additional issues.
-
-## Known Issues
-
-**Gameplay-blocking**: None known through Chapter 2.
-
-**Visual artifacts**:
-- Flames in Tutankoopa's tomb are not rendered (N64 uses chroma key render-to-texture which is not yet supported)
-- Visual artifacting around text boxes after chapter completion and when acquiring the upgraded hammer in Tutankoopa's tomb
-- Minor visual artifacting when Tutankoopa uses the giant chain chomp ability
-- Image displayed when a new partner is acquired is not quite right
-- Toad Town dock area has water geometry clipping issues
-- Some dual-texture blend modes fall back to single-texture (TEXEL1 sampling limitation)
-
-**Unimplemented effects**:
-- Water splash refraction effect
-- Underwater distortion warp effect
-- Pause screen shows a dark fill instead of freeze-frame (no GPU framebuffer readback)
-- Crystal ball reflection in Merlon's house
-
-See `PORT_SKIPS.md` for a complete list of stubbed features.
-
-## Architecture
-
-```
-papermario-pc-upload/
-├── src/              # Decomp game source (C) with #ifdef PORT adaptations
-├── include/          # Game headers
-├── port/             # PORT layer: OS stubs, ROM loading, texture conversion,
-│                     #   UI menu, shape swizzling, audio bridge
-├── libultraship/     # Rendering engine (submodule)
-├── assets/           # Asset YAML definitions (non-copyrighted metadata)
-└── build/            # Build output
+```bash
+sudo apt install cmake build-essential ninja-build libsdl2-dev libpng-dev libglew-dev \
+     libzip-dev nlohmann-json3-dev libtinyxml2-dev libspdlog-dev
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target PaperShip
+python3 tools/port/pack_o2r.py assets/port build/papership.o2r   # or: cmake --build build --target GeneratePortO2R
+cp "Paper Mario (USA).z64" build/ && cd build && ./PaperShip
 ```
 
-The game reads all assets at runtime from the provided ROM file. No copyrighted data is stored in this repository.
+`tools/port/prepare_us_rom.py` verifies a ROM (or a zip containing one), converts
+`.v64`/`.n64` dumps and checks the SHA-1.
 
-## Contributing
+## Repository layout
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed guide to the codebase, frame lifecycle, subsystem explanations, and common development patterns.
+```
+android/            Gradle project: SDL2 Java glue, MainActivity, touch overlay, ROM import
+port/               PaperShip PORT layer (N64 OS/NuSystem shims, ROM loading, audio mixer, menu)
+port/android/       Android-only glue: JNI bridge, logcat redirect, touch-input merge
+src/, include/      Paper Mario decompilation with #ifdef PORT adaptations
+libultraship/       Rendering/audio/input engine (Fast3D interpreter, OpenGL ES on Android)
+Torch/              Asset pipeline tool (desktop only)
+assets/port/        Shaders packed into papership.o2r
+tools/port/         ROM verification and archive packing scripts
+docs/               Android build guide and porting notes
+CMakeLists.txt      Builds the game: executable on desktop, libPaperShip.so on Android
+```
 
-Key areas that need work:
+## Roadmap
 
-- **Flame effect**: Needs proper chroma key emulation or shader-based approach
-- **TEXEL1 sampling**: Fix the Fast3D interpreter to properly sample tile 1 in 2-cycle mode
-- **Framebuffer effects**: water_splash, underwater, crystal_ball, pause freeze-frame
-- **Frame interpolation**: 60fps support via matrix interpolation
-- **Windows/Linux testing**: Platform-specific bug fixes and testing
+See [docs/PORTING_NOTES.md](docs/PORTING_NOTES.md) for what was done, what is
+known to be missing and the suggested next steps (device testing, touch
+control polish, rumble, 32-bit ARM, iOS).
 
-## License
+## Licensing
 
-This project does not include any copyrighted Nintendo assets. You must provide your own legally obtained ROM to use this software.
-
-This software is provided as-is for educational and interoperability purposes.
+The decompiled game code and PaperShip's port layer declare no license (the
+game code is Nintendo's). Third-party components keep their own licenses:
+libultraship and Torch are MIT, SDL is zlib. The Android integration added in
+this repository (`android/app/src/main/java/com/papership/mobile`,
+`port/android`, `tools/port`) is provided as-is for educational and
+interoperability purposes.
 
 ## Credits
 
-- **versacepapermario** — Project lead
-- [Paper Mario Decompilation Team](https://github.com/pmret/papermario) — Complete US/JP/PAL/iQue decomp
-- [libultraship / Ship of Harkinian Team](https://github.com/HarbourMasters) — PC rendering engine
-- [Ghostship (SM64 PC Port)](https://github.com/HarbourMasters/Ghostship) — Reference implementation
+- **versacepapermario** and the PaperShip contributors — the PC port this is based on
+- [Paper Mario decompilation team](https://github.com/pmret/papermario) — the complete decomp
+- [Kenix3 / HarbourMasters](https://github.com/Kenix3/libultraship) — libultraship
+- [Waterdish](https://github.com/Waterdish) — Android ports of Ship of Harkinian and 2Ship2Harkinian, the reference for how libultraship games run on Android
+- [SDL](https://libsdl.org) — window, input and audio on every platform

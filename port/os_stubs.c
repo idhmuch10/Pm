@@ -15,6 +15,7 @@
  * underlying hardware operations don't apply.
  */
 
+#include "port_paths.h"
 #include "ultra64.h"
 #include <stdio.h>
 #include <string.h>
@@ -72,13 +73,24 @@ static u8 flash_data[FLASH_SIZE];
 static u8 flash_write_buf[FLASH_PAGE_SIZE];
 static int flash_initialized = 0;
 static const char* SAVE_FILENAME = "papership_save.bin";
+static char sSavePath[1024];
+
+// The save lives in the app data directory (next to the executable on desktop,
+// the app's private external files directory on Android) instead of the CWD,
+// which is not writable on phones.
+static const char* flash_save_path(void) {
+    if (sSavePath[0] == '\0') {
+        port_get_data_path(SAVE_FILENAME, sSavePath, sizeof(sSavePath));
+    }
+    return sSavePath;
+}
 
 static void flash_load_from_disk(void) {
-    FILE* f = fopen(SAVE_FILENAME, "rb");
+    FILE* f = fopen(flash_save_path(), "rb");
     if (f) {
         size_t bytesRead = fread(flash_data, 1, FLASH_SIZE, f);
         fclose(f);
-        fprintf(stderr, "[Flash] Loaded save data from %s (%zu bytes)\n", SAVE_FILENAME, bytesRead);
+        fprintf(stderr, "[Flash] Loaded save data from %s (%zu bytes)\n", flash_save_path(), bytesRead);
     } else {
         memset(flash_data, 0, FLASH_SIZE);
         fprintf(stderr, "[Flash] No save file found, starting fresh\n");
@@ -86,12 +98,12 @@ static void flash_load_from_disk(void) {
 }
 
 static void flash_flush_to_disk(void) {
-    FILE* f = fopen(SAVE_FILENAME, "wb");
+    FILE* f = fopen(flash_save_path(), "wb");
     if (f) {
         fwrite(flash_data, 1, FLASH_SIZE, f);
         fclose(f);
     } else {
-        fprintf(stderr, "[Flash] ERROR: Could not write save file %s\n", SAVE_FILENAME);
+        fprintf(stderr, "[Flash] ERROR: Could not write save file %s\n", flash_save_path());
     }
 }
 

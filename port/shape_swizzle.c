@@ -19,7 +19,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "port/endian.h"
+#include "port/port_endian.h"
 
 // N64 address where gMapShapeData is loaded (from decomp's undefined_syms.txt)
 #define N64_SHAPE_BASE 0x80210000

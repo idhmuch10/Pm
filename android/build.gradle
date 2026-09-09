@@ -1,0 +1,4 @@
+// PaperShip Mobile - Android build of the Paper Mario 64 decomp/libultraship port.
+plugins {
+    id "com.android.application" version "8.10.1" apply false
+}

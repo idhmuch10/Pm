@@ -1,6 +1,11 @@
 #ifndef _DEAD_H_
 #define _DEAD_H_
 
+// PORT: glibc's <math.h> declares atan2 through macros that paste the function
+// name; parse it before "#define atan2 dead_atan2" below or those declarations
+// break when a dead/ file includes this header before common.h.
+#include <math.h>
+
 #define gCameras dead_gCameras
 #define evt_get_variable dead_evt_get_variable
 #define evt_set_variable dead_evt_set_variable

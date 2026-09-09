@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PaperShip Mobile</string>
+    <string name="rom_dialog_title">Paper Mario ROM required</string>
+    <string name="rom_dialog_message">PaperShip Mobile needs your own, legally obtained Paper Mario (USA) Nintendo 64 ROM (.z64, .v64 or .n64, 40 MB).\n\nThe file is copied once into this app\'s private folder and never leaves your device.</string>
+    <string name="rom_dialog_select">Select ROM</string>
+    <string name="rom_dialog_quit">Quit</string>
+    <string name="rom_import_failed">ROM import failed: %1$s</string>
+    <string name="rom_importing">Importing ROM…</string>
+</resources>

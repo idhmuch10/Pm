@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "port/endian.h"
+#include "port/port_endian.h"
 #include "port/effect_gfx_tables.h"
 
 // N64 struct sizes

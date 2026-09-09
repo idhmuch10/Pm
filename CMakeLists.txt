@@ -4,6 +4,20 @@ cmake_minimum_required(VERSION 3.16.0 FATAL_ERROR)
 project(PaperShip VERSION 0.1.0 LANGUAGES C CXX ASM)
 include(FetchContent)
 
+################################################################################
+# Android (PaperShip Mobile)
+#
+# On Android the game is built as a shared library (libPaperShip.so) that is
+# loaded by SDL's Java activity (see android/). libultraship is built with its
+# OpenGL ES 3 backend and SDL2 is fetched and compiled from source by
+# libultraship/cmake/dependencies/android.cmake.
+################################################################################
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # Android 15+ devices with 16 KB memory pages require 16 KB aligned ELF segments.
+    add_link_options("-Wl,-z,max-page-size=16384")
+    set(USE_OPENGLES ON CACHE BOOL "Use OpenGL ES (required on Android)" FORCE)
+endif()
+
 include(cmake/papership-cvars.cmake)
 include(cmake/lus-cvars.cmake)
 
@@ -36,6 +50,7 @@ execute_process(
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_COMMIT_TAG
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
 )
 
 if(NOT GIT_COMMIT_TAG)
@@ -108,6 +123,14 @@ add_compile_definitions(
     _LARGEFILE64_SOURCE=1
     _POSIX_C_SOURCE=200809L
 )
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
+# Mobile GPUs/CPUs are slower than desktops: use full optimisation. The game
+# target additionally gets -fno-strict-aliasing/-fwrapv (see below) because the
+# decompiled code relies on wraparound arithmetic and type punning.
+set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 else()
 set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O1 -DNDEBUG")
@@ -144,7 +167,7 @@ set(PM64_COMPILE_DEFINITIONS
 )
 
 # Find necessary libraries
-if (UNIX AND NOT APPLE)
+if (UNIX AND NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
 find_package(OpenGL REQUIRED)
 endif()
 
@@ -231,7 +254,12 @@ foreach(source IN LISTS ALL_FILES)
     source_group("${source_path_adjusted}" FILES "${source}")
 endforeach()
 
-add_executable(${PROJECT_NAME} ${ALL_FILES})
+if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+    # Loaded by org.libsdl.app.SDLActivity (MainActivity.getLibraries returns "SDL2", "PaperShip")
+    add_library(${PROJECT_NAME} SHARED ${ALL_FILES})
+else()
+    add_executable(${PROJECT_NAME} ${ALL_FILES})
+endif()
 
 # Apply Paper Mario-specific defines ONLY to our target (not subprojects)
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${PM64_COMPILE_DEFINITIONS})
@@ -342,8 +370,8 @@ else()
  	set(ADDITIONAL_LIBRARY_DEPENDENCIES "")
 endif()
 
-if(CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch")
-    # Switch-specific setup would go here
+if(CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|Android")
+    # Torch is a host tool; on Android the port archive is packed by the Gradle build
 else()
 option(BUILD_PM64 "Build with Paper Mario 64 support" ON)
 add_subdirectory(Torch)
@@ -451,6 +479,36 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
           -pthread
       )
       target_link_options(${PROJECT_NAME} PRIVATE -pthread)
+  elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
+      target_compile_options(${PROJECT_NAME} PRIVATE
+          -Wall -Wextra -Wno-error
+          -Wno-return-type
+          -Wno-unused-parameter
+          -Wno-unused-function
+          -Wno-unused-variable
+          -Wno-missing-field-initializers
+          -Wno-parentheses
+          -Wno-narrowing
+          -Wno-missing-braces
+          -Wno-int-conversion
+          -Wno-unknown-warning-option
+          $<$<COMPILE_LANGUAGE:C>:
+              -Wno-implicit-function-declaration
+              -Wno-incompatible-pointer-types
+              -Wno-incompatible-library-redeclaration
+              -Wno-macro-redefined
+              -fno-strict-aliasing
+              -fwrapv
+          >
+          $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>
+          $<$<COMPILE_LANGUAGE:CXX>:
+              -Wno-c++11-narrowing
+              -Wno-deprecated-enum-enum-conversion
+          >
+      )
+      target_compile_definitions(${PROJECT_NAME} PRIVATE PORT_ANDROID=1)
+      # SDL2 comes from libultraship's FetchContent build; the rest are NDK system libraries.
+      target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2 GLESv3 EGL log android)
   else()
       if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
         set(CPU_OPTION -msse2 -mfpmath=sse)
@@ -460,6 +518,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
 
       target_compile_options(${PROJECT_NAME} PRIVATE
           -Wall -Wextra -Wno-error
+          -Wno-return-type
           -Wno-unused-parameter
           -Wno-unused-function
           -Wno-unused-variable
@@ -469,9 +528,10 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
           -Wno-missing-braces
           -Wno-int-conversion
           $<$<COMPILE_LANGUAGE:C>:
-              -Werror-implicit-function-declaration
+              -Wno-implicit-function-declaration
               -Wno-incompatible-pointer-types
-              -fpermissive
+              -Wno-incompatible-library-redeclaration
+              -Wno-macro-redefined
           >
           $<$<COMPILE_LANGUAGE:CXX>:-fpermissive>
           $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>
@@ -488,17 +548,19 @@ endif()
 ################################################################################
 # Post-build: copy asset yamls and config
 ################################################################################
+if (NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
 add_custom_command(
 	TARGET ${PROJECT_NAME} POST_BUILD
 	COMMENT "Copying asset yamls..."
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/config.yml" "$<TARGET_FILE_DIR:PaperShip>/config.yml"
 	COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets/" "$<TARGET_FILE_DIR:PaperShip>/assets/"
 )
+endif()
 
 ################################################################################
 # Torch asset extraction
 ################################################################################
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "NintendoSwitch|Android")
 include(ExternalProject)
 ExternalProject_Add(TorchExternal
 	PREFIX TorchExternal

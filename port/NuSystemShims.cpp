@@ -10,7 +10,9 @@
 #include <libultraship.h>
 #include "NuSystemShims.h"
 #include "Engine.h"
+#include "port_paths.h"
 #include <SDL2/SDL.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -22,11 +24,21 @@
 #include <mach-o/dyld.h>
 #include <execinfo.h>
 #endif
+#ifdef __linux__
+#include <unistd.h>
+#endif
+#ifdef __ANDROID__
+#include "android/AndroidPort.h"
+#endif
 
-// ROM file handle for nuPiReadRom
-static FILE* sRomFile = nullptr;
+// ROM image for nuPiReadRom. The whole cartridge image (40 MiB) is kept in memory,
+// normalised to big-endian (.z64) byte order, so reads are plain memcpy's and
+// .v64/.n64 dumps work everywhere (including Android, where the ROM is imported
+// through the system file picker).
+static std::vector<uint8_t> sRomData;
 static size_t sRomFileSize = 0;
 static std::mutex sRomFileMutex;
+static std::string sRomPathOverride;
 
 extern "C" {
 #include "common.h"
@@ -250,6 +262,17 @@ u8 nuContInit(void) {
 }
 
 /**
+ * Merge platform-specific input (the Android on-screen controller) into the polled pads.
+ */
+static void port_platform_merge_input(OSContPad* pads) {
+#ifdef __ANDROID__
+    port_android_merge_input(pads);
+#else
+    (void)pads;
+#endif
+}
+
+/**
  * nuContDataGet - Get controller data for one controller.
  * Polls libultraship's ControlDeck for the latest keyboard/gamepad state.
  */
@@ -257,6 +280,7 @@ void nuContDataGet(OSContPad* contdata, u32 padno) {
     // Poll ControlDeck to populate nuContData with latest input
     memset(nuContData, 0, sizeof(nuContData));
     Ship::Context::GetInstance()->GetControlDeck()->WriteToPad(nuContData);
+    port_platform_merge_input(nuContData);
     if (padno < MAXCONTROLLERS) {
         *contdata = nuContData[padno];
     }
@@ -268,6 +292,7 @@ void nuContDataGet(OSContPad* contdata, u32 padno) {
 void nuContDataGetAll(OSContPad* contdata) {
     memset(nuContData, 0, sizeof(nuContData));
     Ship::Context::GetInstance()->GetControlDeck()->WriteToPad(nuContData);
+    port_platform_merge_input(nuContData);
     for (int i = 0; i < MAXCONTROLLERS; i++) {
         contdata[i] = nuContData[i];
     }
@@ -285,6 +310,7 @@ void nuContDataRead(OSContPad* pad) {
     // Poll ControlDeck
     memset(nuContData, 0, sizeof(nuContData));
     Ship::Context::GetInstance()->GetControlDeck()->WriteToPad(nuContData);
+    port_platform_merge_input(nuContData);
     if (pad != NULL) {
         for (int i = 0; i < MAXCONTROLLERS; i++) {
             pad[i] = nuContData[i];
@@ -379,17 +405,31 @@ void nuPiInit(void) {
 }
 
 /**
- * nuPiReadRom - Read data from ROM file
- * On N64: DMA transfer from cartridge.
- * On PC: Read from the ROM .z64 file on disk.
- *
- * The ROM file is searched in several locations:
- *   1. Current working directory (build/)
- *   2. Parent directory (papermario-recomp/)
- *   3. Project root (Paper Mario 64 Project/)
- *
- * Accepted filenames: Paper Mario (USA).z64, baserom.us.z64, pm64.z64
+ * port_set_rom_path - Make the ROM search try `path` first.
+ * Used by the Android activity after the user imported a ROM; launchers on other
+ * platforms can use it too (the PAPERSHIP_ROM environment variable is also honoured).
  */
+extern "C" void port_set_rom_path(const char* path) {
+    std::lock_guard<std::mutex> lock(sRomFileMutex);
+    sRomPathOverride = path ? path : "";
+}
+
+/**
+ * port_get_data_path - Build "<app data directory>/<filename>".
+ * On desktop the app directory is next to the executable (or $SHIP_HOME); on
+ * Android it is the app's private external files directory.
+ */
+extern "C" const char* port_get_data_path(const char* filename, char* out, size_t outSize) {
+    std::string path = Ship::Context::GetPathRelativeToAppDirectory(filename ? filename : "");
+    snprintf(out, outSize, "%s", path.c_str());
+    return out;
+}
+
+extern "C" int port_rom_is_loaded(void) {
+    std::lock_guard<std::mutex> lock(sRomFileMutex);
+    return sRomData.empty() ? 0 : 1;
+}
+
 static std::string getExeDirectory() {
 #ifdef __APPLE__
     char path[1024];
@@ -399,64 +439,174 @@ static std::string getExeDirectory() {
         auto pos = s.rfind('/');
         if (pos != std::string::npos) return s.substr(0, pos);
     }
+#elif defined(__linux__) && !defined(__ANDROID__)
+    char path[1024];
+    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len > 0) {
+        std::string s(path, (size_t)len);
+        auto pos = s.rfind('/');
+        if (pos != std::string::npos) return s.substr(0, pos);
+    }
 #endif
     return ".";
 }
 
+/**
+ * Convert a ROM image to big-endian (.z64) byte order in place.
+ * Returns false if the first word is not one of the three known N64 magics.
+ */
+static bool normalizeRomByteOrder(std::vector<uint8_t>& rom) {
+    if (rom.size() < 0x1000) {
+        return false;
+    }
+    uint32_t magic = ((uint32_t)rom[0] << 24) | ((uint32_t)rom[1] << 16) | ((uint32_t)rom[2] << 8) | rom[3];
+    switch (magic) {
+        case 0x80371240: // .z64, big-endian
+            return true;
+        case 0x37804012: // .v64, byte-swapped
+            for (size_t i = 0; i + 1 < rom.size(); i += 2) {
+                std::swap(rom[i], rom[i + 1]);
+            }
+            return true;
+        case 0x40123780: // .n64, little-endian words
+            for (size_t i = 0; i + 3 < rom.size(); i += 4) {
+                std::swap(rom[i], rom[i + 3]);
+                std::swap(rom[i + 1], rom[i + 2]);
+            }
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool tryLoadRomFile(const std::string& path) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (f == nullptr) {
+        return false;
+    }
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (length < 0x1000 || length > (64L << 20)) {
+        SPDLOG_WARN("Ignoring {}: size {} is not plausible for an N64 ROM", path, length);
+        fclose(f);
+        return false;
+    }
+    std::vector<uint8_t> data((size_t)length);
+    size_t read = fread(data.data(), 1, data.size(), f);
+    fclose(f);
+    if (read != data.size()) {
+        SPDLOG_WARN("Ignoring {}: short read ({} of {} bytes)", path, read, data.size());
+        return false;
+    }
+    if (!normalizeRomByteOrder(data)) {
+        SPDLOG_WARN("Ignoring {}: not an N64 ROM image", path);
+        return false;
+    }
+    std::string internalName(reinterpret_cast<const char*>(&data[0x20]), 20);
+    std::string gameCode(reinterpret_cast<const char*>(&data[0x3B]), 4);
+    SPDLOG_INFO("Opened ROM file: {} ({} bytes, '{}', game code {})", path, data.size(), internalName, gameCode);
+    if (gameCode != "NMQE") {
+        SPDLOG_WARN("Game code {} is not the US release (NMQE); only the US ROM is supported", gameCode);
+    }
+    sRomData = std::move(data);
+    sRomFileSize = sRomData.size();
+    return true;
+}
+
+/**
+ * nuPiReadRom_OpenRomFile - Locate and load the ROM image (once).
+ * Must be called with sRomFileMutex held.
+ *
+ * Search order:
+ *   1. the path given through port_set_rom_path() (Android file picker) or $PAPERSHIP_ROM,
+ *   2. the app data directory (Android: private external files dir; desktop: next to the
+ *      executable or $SHIP_HOME) and the app bundle directory,
+ *   3. the current directory and its parents, the executable directory and its parents.
+ *
+ * Accepted file names: Paper Mario (USA).z64, baserom.us.z64, pm64.z64, papermario.z64,
+ * Paper Mario (U) [!].z64, Paper Mario (U).z64 and .v64/.n64 variants of the first one.
+ */
 static void nuPiReadRom_OpenRomFile(void) {
     static bool sSearched = false;
-    if (sSearched) return;
+    if (sSearched) {
+        return;
+    }
     sSearched = true;
 
-    const char* rom_names[] = {
+    std::vector<std::string> candidates;
+    if (!sRomPathOverride.empty()) {
+        candidates.push_back(sRomPathOverride);
+    }
+    if (const char* env = getenv("PAPERSHIP_ROM")) {
+        if (env[0] != '\0') {
+            candidates.push_back(env);
+        }
+    }
+
+    static const char* const rom_names[] = {
         "Paper Mario (USA).z64",
         "baserom.us.z64",
         "pm64.z64",
         "papermario.z64",
+        "Paper Mario (U) [!].z64",
+        "Paper Mario (U).z64",
+        "Paper Mario (USA).v64",
+        "Paper Mario (USA).n64",
     };
 
-    // Search relative to CWD and relative to executable location
+    std::vector<std::string> search_dirs;
+#ifdef __ANDROID__
+    if (const char* dir = SDL_AndroidGetExternalStoragePath()) {
+        search_dirs.push_back(dir);
+    }
+    if (const char* dir = SDL_AndroidGetInternalStoragePath()) {
+        search_dirs.push_back(dir);
+    }
+#endif
+    search_dirs.push_back(Ship::Context::GetAppDirectoryPath());
+    search_dirs.push_back(Ship::Context::GetAppBundlePath());
     std::string exeDir = getExeDirectory();
-    std::vector<std::string> search_dirs = {
-        ".",
-        "..",
-        "../..",
-        exeDir,
-        exeDir + "/..",
-        exeDir + "/../..",
-    };
+    search_dirs.push_back(".");
+    search_dirs.push_back("..");
+    search_dirs.push_back("../..");
+    search_dirs.push_back(exeDir);
+    search_dirs.push_back(exeDir + "/..");
+    search_dirs.push_back(exeDir + "/../..");
 
-    for (auto& dir : search_dirs) {
-        for (auto name : rom_names) {
-            std::string path = dir + "/" + name;
-            FILE* f = fopen(path.c_str(), "rb");
-            if (f) {
-                fseek(f, 0, SEEK_END);
-                sRomFileSize = ftell(f);
-                fseek(f, 0, SEEK_SET);
-                sRomFile = f;
-                SPDLOG_INFO("Opened ROM file: {} ({} bytes)", path, sRomFileSize);
-                return;
-            }
+    for (const auto& dir : search_dirs) {
+        for (const char* name : rom_names) {
+            candidates.push_back(dir + "/" + name);
+        }
+    }
+
+    for (const auto& path : candidates) {
+        if (tryLoadRomFile(path)) {
+            return;
         }
     }
     SPDLOG_ERROR("ROM file not found! Audio and other DMA-loaded data will be unavailable.");
-    SPDLOG_ERROR("Place your Paper Mario (USA).z64 ROM in the build directory or project root.");
+    SPDLOG_ERROR("Place your Paper Mario (USA).z64 ROM next to the executable or in the project root, "
+                 "or set PAPERSHIP_ROM to its path.");
 }
 
+/**
+ * nuPiReadRom - Read data from the ROM image
+ * On N64: DMA transfer from cartridge.
+ * On PC: memcpy from the in-memory copy of the .z64 file.
+ */
 void nuPiReadRom(u32 rom_addr, void* buf_ptr, u32 size) {
+    // Serialize all ROM access — the audio thread and the main thread may call
+    // nuPiReadRom concurrently, and the image is loaded lazily on first use.
+    std::lock_guard<std::mutex> lock(sRomFileMutex);
     nuPiReadRom_OpenRomFile();
 
-    // Serialize all ROM file access — audio thread and main thread may call
-    // nuPiReadRom concurrently, and fseek+fread is not atomic.
-    std::lock_guard<std::mutex> lock(sRomFileMutex);
-
-    if (sRomFile == nullptr) {
+    if (sRomData.empty()) {
         memset(buf_ptr, 0, size);
         return;
     }
 
-    if (rom_addr + size > sRomFileSize) {
+    if ((uint64_t)rom_addr + size > sRomFileSize) {
         static int sOutOfBoundsCount = 0;
         if (sOutOfBoundsCount < 5) {
             SPDLOG_WARN("nuPiReadRom: read past end of ROM (addr=0x{:08X} size={}, ROM size={})",
@@ -470,17 +620,11 @@ void nuPiReadRom(u32 rom_addr, void* buf_ptr, u32 size) {
         return;
     }
 
-    fseek(sRomFile, rom_addr, SEEK_SET);
-    size_t read = fread(buf_ptr, 1, size, sRomFile);
-    if (read != size) {
-        SPDLOG_WARN("nuPiReadRom: short read at 0x{:08X} (got {} of {} bytes)", rom_addr, read, size);
-        memset((u8*)buf_ptr + read, 0, size - read);
-    }
-
-    // .z64 ROM data is big-endian. We read raw bytes here and do NOT byte-swap.
+    // .z64 ROM data is big-endian. We copy raw bytes here and do NOT byte-swap.
     // Callers that read multi-byte integers (u32/u16) from ROM data must handle
     // endianness conversion themselves. Raw byte data (compressed streams, textures,
     // rasters) is used as-is since individual bytes have no endianness.
+    memcpy(buf_ptr, sRomData.data() + rom_addr, size);
 }
 
 /**

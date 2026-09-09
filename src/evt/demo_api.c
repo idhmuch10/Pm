@@ -2,7 +2,7 @@
 #include "ld_addrs.h"
 #ifdef PORT
 #include "rom_offsets.h"
-#include "port/endian.h"
+#include "port/port_endian.h"
 #endif
 
 // TODO: not sure where these go

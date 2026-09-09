@@ -18,6 +18,13 @@
 #ifdef __APPLE__
 #include <execinfo.h>
 #endif
+#ifdef __ANDROID__
+// SDL_main.h renames main() to SDL_main(), which SDLActivity looks up in libPaperShip.so.
+#include <SDL2/SDL_main.h>
+#include <android/log.h>
+#include "android/AndroidPort.h"
+#endif
+#include "port_paths.h"
 
 extern "C" {
 #include "common.h"
@@ -174,6 +181,10 @@ void push_frame() {
         if (h > 0) gPortWindowAspectRatio = (float)w / (float)h;
     }
 
+#ifdef __ANDROID__
+    port_android_pre_frame();
+#endif
+
     GameEngine::StartAudioFrame();
     GameEngine::Instance->StartFrame();
 
@@ -269,6 +280,13 @@ int main(int argc, char* argv[]) {
     // Make stderr unbuffered so all log messages are visible immediately
     setvbuf(stderr, nullptr, _IONBF, 0);
 
+#ifdef __ANDROID__
+    // Route stdout/stderr to logcat, then wait until MainActivity has copied the
+    // data files (papership.o2r, gamecontrollerdb.txt) and imported the ROM.
+    port_android_init();
+    port_android_wait_for_setup();
+#endif
+
     // Install crash handler for debugging with backtrace
     auto crashHandler = [](int sig) {
         const char* sigName = (sig == SIGSEGV) ? "SIGSEGV" : (sig == SIGBUS) ? "SIGBUS" : "SIGABRT";
@@ -276,7 +294,12 @@ int main(int argc, char* argv[]) {
         // Dump worker and audio debug info
         worker_dump_last();
         // Also write to a file so crash info is always accessible
-        FILE* crashFile = fopen("/tmp/papership_crash.log", "w");
+        char crashPath[1024];
+        port_get_data_path("papership_crash.log", crashPath, sizeof(crashPath));
+        FILE* crashFile = fopen(crashPath, "w");
+#ifdef __ANDROID__
+        __android_log_print(ANDROID_LOG_ERROR, "PaperShip", "[CRASH] %s received", sigName);
+#endif
 #ifdef __APPLE__
         void* callstack[64];
         int frames = backtrace(callstack, 64);

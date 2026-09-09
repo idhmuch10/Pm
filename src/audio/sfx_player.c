@@ -1,7 +1,7 @@
 #include "audio.h"
 #include "audio/core.h"
 #ifdef PORT
-#include "port/endian.h"
+#include "port/port_endian.h"
 #include <stdio.h>
 // SEF lookup table entries are u16 pairs stored big-endian from ROM.
 // On little-endian PC, reads via (u16*) need byte-swapping.

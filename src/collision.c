@@ -1,7 +1,7 @@
 #include "common.h"
 #include "model.h"
 #ifdef PORT
-#include "port/endian.h"
+#include "port/port_endian.h"
 #endif
 
 typedef struct HitFile {

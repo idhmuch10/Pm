@@ -3,7 +3,7 @@
 #include "ld_addrs.h"
 #ifdef PORT
 #include <stdio.h>
-#include "port/endian.h"
+#include "port/port_endian.h"
 // Forward declarations for byte-swap helpers (defined later in this file)
 static void au_mseq_header_swap(MSEQHeader* h);
 static void au_mseq_track_data_swap(MSEQHeader* mseqFile);

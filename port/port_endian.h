@@ -1,8 +1,12 @@
 /**
- * endian.h - Big-endian to native byte-swap helpers for PC port
+ * port_endian.h - Big-endian to native byte-swap helpers for PC port
  *
  * .z64 ROM data is big-endian. On PC (little-endian), multi-byte integers
  * read from ROM buffers must be byte-swapped. Individual bytes don't need swapping.
+ *
+ * Named port_endian.h (not endian.h): port/ is on the include path, and a file
+ * called endian.h would shadow the C library's <endian.h> for every target in
+ * the tree, including SDL2 when it is built from source for Android.
  */
 
 #ifndef PORT_ENDIAN_H

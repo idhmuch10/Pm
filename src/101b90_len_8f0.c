@@ -6,7 +6,7 @@
 #ifdef PORT
 #include <stdio.h>
 #include <string.h>
-#include "../port/endian.h"
+#include "../port/port_endian.h"
 #endif
 
 #ifdef SHIFT

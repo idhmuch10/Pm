@@ -1,6 +1,6 @@
 #include "kmr_21.h"
 #ifdef PORT
-#include "port/endian.h"
+#include "port/port_endian.h"
 #endif
 
 typedef struct TitleDataFile {

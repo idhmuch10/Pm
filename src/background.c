@@ -2,7 +2,7 @@
 #include "model.h"
 #include "gcc/string.h"
 #ifdef PORT
-#include "../port/endian.h"
+#include "../port/port_endian.h"
 #include <stdio.h>
 extern void gfx_texture_cache_clear(void);
 #endif

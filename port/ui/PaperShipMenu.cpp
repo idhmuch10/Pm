@@ -241,11 +241,16 @@ void PaperShipMenu::DrawElement() {
         // Re-launch the executable and exit current process
         SDL_Window* wnd = GetSDLWindow();
         if (wnd) SDL_SetWindowFullscreen(wnd, 0);
+#if defined(__APPLE__)
         char path[1024];
         uint32_t size = sizeof(path);
         if (_NSGetExecutablePath(path, &size) == 0) {
             execl(path, path, nullptr);
         }
+#elif defined(__linux__) && !defined(__ANDROID__)
+        execl("/proc/self/exe", "/proc/self/exe", nullptr);
+#endif
+        // Android: the process simply exits; SDLActivity finishes and the launcher restarts it.
         exit(0);
     }
     if (ImGui::Button("Exit Game", ImVec2(-1, 0))) {

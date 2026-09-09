@@ -9,7 +9,7 @@
 
 #include "nu/nusys.h"
 #include "libc/xstdio.h"
-#include "../port/endian.h"
+#include "../port/port_endian.h"
 
 /* ------------------------------------------------------------------ */
 /* Crash screen — N64 debug feature, not needed on PC                  */

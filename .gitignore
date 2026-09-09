@@ -39,3 +39,7 @@ mods/*.otr
 *.app
 *.nro
 *.appimage
+
+# Local build trees and Python caches
+build-*/
+__pycache__/

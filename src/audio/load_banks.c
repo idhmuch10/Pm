@@ -1,7 +1,7 @@
 #include "audio.h"
 #include "audio/core.h"
 #ifdef PORT
-#include "port/endian.h"
+#include "port/port_endian.h"
 #include <stdio.h>
 #endif
 

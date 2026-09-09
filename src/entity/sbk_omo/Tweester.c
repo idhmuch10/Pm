@@ -21,7 +21,7 @@ extern Vtx D_0A000410_E57270[];
 extern Vtx D_0A000820_E57680[];
 extern Vtx D_0A000860_E576C0[];
 #include <string.h>
-#include "../port/endian.h"
+#include "../port/port_endian.h"
 #define N64_VTX_SIZE 16
 
 // Pre-converted face texture: CI4 expanded to IA8 (64x32 = 2048 bytes)

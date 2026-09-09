@@ -116,7 +116,9 @@ do not crash the game:
 * **Save report (current log) now** opens the same Copy / Save to Downloads /
   Share dialog as after a crash, but with the log of the *running* session.
   Open the menu right after the problem happened (during a cutscene is fine)
-  and save or share the report.
+  and save or share the report. The report also carries the live status block
+  and, in the world, a dump of the colliders around Mario (names, flags,
+  bounding boxes, first triangles) plus wall probes in eight directions.
 * **Live status** shows the player position, action state and flags, the
   collision ids the game currently sees (floor, wall, inspect target, pushing),
   the collider count of the map and the partner's position/floor. When Mario

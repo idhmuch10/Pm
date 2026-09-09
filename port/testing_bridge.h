@@ -40,6 +40,9 @@ int port_testing_story_intro(void);
 /* Multi-line live status: player position/state, collision ids, partner NPC, sprite. */
 void port_testing_status_text(char* buf, size_t size);
 
+/* Log the colliders near the player and eight horizontal wall probes (part of the report). */
+void port_testing_dump_collision(void);
+
 /* Offer the current session log as a report (Android: the Copy / Save / Share dialog).
  * Returns non-zero when a dialog was requested; msg receives a status line either way. */
 int port_testing_request_report(char* msg, size_t msgSize);

@@ -10,6 +10,7 @@
 #include "port_paths.h"
 #include <limits.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdarg.h>
 #ifdef __ANDROID__
 #include "android/AndroidPort.h"
@@ -194,12 +195,95 @@ void port_testing_status_text(char* buf, size_t size) {
     (void)n;
 }
 
+static f32 aabb_distance_xz(ColliderBoundingBox* aabb, f32 x, f32 z) {
+    f32 dx = 0.0f;
+    f32 dz = 0.0f;
+    if (x < aabb->min.x) {
+        dx = aabb->min.x - x;
+    } else if (x > aabb->max.x) {
+        dx = x - aabb->max.x;
+    }
+    if (z < aabb->min.z) {
+        dz = aabb->min.z - z;
+    } else if (z > aabb->max.z) {
+        dz = z - aabb->max.z;
+    }
+    return sqrtf(dx * dx + dz * dz);
+}
+
+static const char* collider_name(int index) {
+    MapSettings* settings = get_current_map_settings();
+    if (settings != NULL && settings->colliderNameList != NULL && index >= 0 && index < gCollisionData.numColliders &&
+        settings->colliderNameList[index] != NULL) {
+        return settings->colliderNameList[index];
+    }
+    return "?";
+}
+
+/* Log the colliders near the player (flags, bounding box, first triangles) and the
+ * result of horizontal wall probes in eight directions, for collision bug reports. */
+void port_testing_dump_collision(void) {
+    CollisionData* cd = &gCollisionData;
+    PlayerStatus* ps = &gPlayerStatus;
+    f32 px = ps->pos.x;
+    f32 py = ps->pos.y;
+    f32 pz = ps->pos.z;
+    int printed = 0;
+    int i;
+
+    fprintf(stderr, "[collision] dump around player (%.1f %.1f %.1f): %d colliders, ignore mask %08X\n", px, py, pz,
+            cd->numColliders, (unsigned)COLLIDER_FLAG_IGNORE_PLAYER);
+    for (i = 0; i < cd->numColliders && printed < 16; i++) {
+        Collider* c = &cd->colliderList[i];
+        f32 d;
+        int t;
+        if (c->numTriangles == 0 || c->aabb == NULL) {
+            continue;
+        }
+        d = aabb_distance_xz(c->aabb, px, pz);
+        if (d > 120.0f) {
+            continue;
+        }
+        fprintf(stderr, "  #%d %s flags=%08X tris=%d verts=%d parentModel=%d aabb=(%.0f %.0f %.0f)-(%.0f %.0f %.0f) dist=%.1f\n",
+                i, collider_name(i), (unsigned)c->flags, c->numTriangles, c->numVertices, c->parentModelIndex,
+                c->aabb->min.x, c->aabb->min.y, c->aabb->min.z, c->aabb->max.x, c->aabb->max.y, c->aabb->max.z, d);
+        for (t = 0; t < c->numTriangles && t < 4; t++) {
+            ColliderTriangle* tri = &c->triangleTable[t];
+            fprintf(stderr, "     tri%d v1=(%.0f %.0f %.0f) v2=(%.0f %.0f %.0f) v3=(%.0f %.0f %.0f) n=(%.2f %.2f %.2f) oneSided=%d\n",
+                    t, tri->v1->x, tri->v1->y, tri->v1->z, tri->v2->x, tri->v2->y, tri->v2->z, tri->v3->x, tri->v3->y,
+                    tri->v3->z, tri->normal.x, tri->normal.y, tri->normal.z, tri->oneSided);
+        }
+        printed++;
+    }
+
+    fprintf(stderr, "  wall probes from the player (26 units, +10 up), yaw:hit@depth:");
+    for (i = 0; i < 8; i++) {
+        f32 yaw = (f32)(i * 45);
+        f32 rad = yaw * 3.14159265f / 180.0f;
+        f32 dx = sinf(rad);
+        f32 dz = -cosf(rad);
+        f32 hx, hy, hz, nx, ny, nz;
+        f32 depth = 26.0f;
+        s32 hit = test_ray_colliders(COLLIDER_FLAG_IGNORE_PLAYER, px, py + 10.01f, pz, dx, 0.0f, dz, &hx, &hy, &hz,
+                                     &depth, &nx, &ny, &nz);
+        if (hit >= 0) {
+            fprintf(stderr, " %d:%d(%s)@%.1f", (int)yaw, hit, collider_name(hit), depth);
+        } else {
+            fprintf(stderr, " %d:-", (int)yaw);
+        }
+    }
+    fprintf(stderr, "\n");
+}
+
 int port_testing_request_report(char* msg, size_t msgSize) {
     char status[1024];
 
     // Put the live status into the log so it travels with the report.
     port_testing_status_text(status, sizeof(status));
     fprintf(stderr, "[status] report requested\n%s", status);
+    if (get_game_mode() == GAME_MODE_WORLD) {
+        port_testing_dump_collision();
+    }
     fflush(stdout);
     fflush(stderr);
 #ifdef __ANDROID__

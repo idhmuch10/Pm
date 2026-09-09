@@ -37,6 +37,26 @@ repository does the same; there are no submodules to initialise.
   uses `return;` in non-void functions and calls `sprintf` without headers),
   and the settings menu's *Restart Game* button no longer calls the macOS-only
   `_NSGetExecutablePath` on other platforms.
+* libultraship is now built out of source. PaperShip built it inside
+  `libultraship/` itself (and had committed 180 build files from the author's
+  Mac); a desktop and an Android build running side by side clobbered each
+  other's objects in `libultraship/src/libultraship.a`.
+* `stb_image.h` is vendored (`libultraship/cmake/dependencies/stb/`): the
+  configure-time download through the `github.com/.../raw/` redirect silently
+  produced an empty header here, which only showed up as missing `stbi_*`
+  identifiers deep into the build.
+* `dead_*` aliases: PaperShip aliases the "dead" world areas' renamed engine
+  symbols with assembler `.set` directives, which works in Mach-O but yields
+  undefined symbols in ELF objects. CMake now generates
+  `-Wl,--defsym=dead_X=X` for Linux/Android from the list in
+  `port/dead_stubs.c`.
+* Two tentative C definitions that older toolchains merged as common symbols
+  (`nuGfxCfb_ptr` in `cam_main.c`, the `spirit_card` `Lights1` stub in
+  `port/effect_gfx_textures.c`) are now `extern` under `PORT`; the NDK links
+  with `-fno-common`.
+* `src/is_debug.c` no longer defines a `void printf()` that overrode libc's
+  for the whole program; under `PORT` the IS-Viewer debug output goes to
+  stderr (logcat on Android).
 
 ### PORT layer (`port/`)
 * `NuSystemShims.cpp`: the ROM is loaded into memory once and normalised from
@@ -75,14 +95,23 @@ repository does the same; there are no submodules to initialise.
 
 ## Verification done in this repository
 
-* Desktop Linux build of the tree with clang 18 (needed the flag fixes above).
-* Android `assembleDebug` for `arm64-v8a` with NDK r27c: see the build status in
-  the commit message / CI. Nothing has been run on a physical device yet.
+* Android `assembleDebug` for `arm64-v8a` with NDK r27c, CMake 3.30 and AGP
+  8.10 succeeds: the APK contains `libPaperShip.so` and `libSDL2.so` (16 KB
+  page aligned), exports `SDL_main` and the five JNI entry points, and bundles
+  `papership.o2r` and `gamecontrollerdb.txt`. The same build runs in CI
+  (`.github/workflows/android.yml`).
+* Desktop Linux: the whole tree compiles with clang 18 after the fixes above
+  (the link needs the same `dead_*` aliases, generated for Linux as well).
+* Nothing has been run on a physical device yet: boot, rendering, audio and
+  input on real hardware are the next thing to test.
 
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.
-   Start with a mid-range arm64 device and `adb logcat -s PaperShip`.
+   Start with a mid-range arm64 device and `adb logcat -s PaperShip`. The frame
+   limiter in `port/Game.cpp` spin-waits for the last ~2 ms of every frame,
+   which is fine on desktop but wastes battery on a phone; replace it with a
+   vsync-driven pace once the game is confirmed to boot.
 2. **Performance.** PaperShip runs the game logic at 30 fps and renders through
    the Fast3D interpreter; the internal resolution multiplier (2x default) and
    MSAA are the first knobs if a phone struggles. Frame interpolation is still a

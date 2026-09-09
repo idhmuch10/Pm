@@ -388,7 +388,9 @@ u8 D_09003200_410490[4096]; // 4096 bytes
 u8 D_09003580_3FDA30[1664]; // 1664 bytes
 u8 D_09003618_39C1D8[2048]; // 2048 bytes
 u8 D_09003780_3FDC30[1152]; // 1152 bytes - spirit_card kalmar 48x48 CI4
-u8 D_09003F80_3FE430[24];  // 24 bytes - spirit_card Lights1 (ambient + directional)
+// 24 bytes - spirit_card Lights1 (ambient + directional). The real Lights1 lives in
+// src/effects/gfx/spirit_card.c; the ROM loader table refers to it through this name.
+extern u8 D_09003F80_3FE430[24];
 u8 D_09003AC0_3EF920[640]; // 640 bytes
 u8 D_09003BE8_3E9B18[2048]; // 2048 bytes
 u8 D_09003C00_3FE0B0[512]; // 512 bytes

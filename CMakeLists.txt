@@ -316,7 +316,10 @@ include_directories(
   ${dr_libs_SOURCE_DIR}
 )
 
-add_subdirectory(libultraship ${CMAKE_CURRENT_SOURCE_DIR}/libultraship)
+# Build libultraship out of source (PaperShip built it inside libultraship/ itself,
+# which polluted the tree and made concurrent desktop/Android builds clobber each
+# other's objects in libultraship/src/libultraship.a).
+add_subdirectory(libultraship)
 add_dependencies(${PROJECT_NAME} libultraship)
 target_link_libraries(${PROJECT_NAME} PRIVATE libultraship)
 
@@ -380,6 +383,19 @@ add_subdirectory(Torch)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE "${ADDITIONAL_LIBRARY_DEPENDENCIES}")
+
+################################################################################
+# dead_* symbol aliases on ELF platforms (see port/dead_stubs.c)
+################################################################################
+if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+    file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/port/dead_stubs.c DEAD_ALIAS_LINES REGEX "^DEAD_ALIAS\\(")
+    foreach(line IN LISTS DEAD_ALIAS_LINES)
+        string(REGEX REPLACE "^DEAD_ALIAS\\(([A-Za-z0-9_]+)\\).*$" "\\1" dead_symbol "${line}")
+        target_link_options(${PROJECT_NAME} PRIVATE "-Wl,--defsym=dead_${dead_symbol}=${dead_symbol}")
+    endforeach()
+    list(LENGTH DEAD_ALIAS_LINES DEAD_ALIAS_COUNT)
+    message(STATUS "PaperShip: ${DEAD_ALIAS_COUNT} dead_* linker aliases generated from port/dead_stubs.c")
+endif()
 
 ################################################################################
 # Compile and link options

@@ -22,6 +22,9 @@
 #include <cstring>
 #include <string>
 
+// libultraship's umbrella header must be seen before common.h is included with
+// C linkage below (ultra64.h pulls it in), exactly like NuSystemShims.cpp does.
+#include <libultraship.h>
 #include <SDL2/SDL.h>
 #include <ship/Context.h>
 #include <ship/window/Window.h>

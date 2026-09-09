@@ -1,4 +1,38 @@
 #include "common.h"
+
+#ifdef PORT
+// PORT: the IS-Viewer 64 debug channel does not exist. Route the game's debug
+// output to stderr (which the Android build forwards to logcat) and leave the C
+// library's printf alone: the original file defines a void printf() that would
+// override libc's for the whole program and conflicts with bionic's <stdio.h>.
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+void is_debug_init(void) {
+}
+
+void osSyncPrintf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+}
+
+void rmonPrintf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+}
+
+void is_debug_panic(const char* message, char* file, s32 line) {
+    fprintf(stderr, "File:%s Line:%d  %s \n", file, line, message);
+    abort();
+}
+
+#else // PORT
+
 #include "stdlib/stdarg.h"
 #include "nu/nusys.h"
 
@@ -95,3 +129,5 @@ void is_debug_panic(const char* message, char* file, s32 line) {
     osSyncPrintf("File:%s Line:%d  %s \n", file, line, message);
     do {} while (true);
 }
+
+#endif // PORT

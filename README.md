@@ -11,10 +11,11 @@ Android NDK into `libPaperShip.so`, which runs inside an
 is read at runtime from a ROM that you import once through the system file
 picker.
 
-> **Status:** early. The APK builds, the game boots through the same code path
-> that PaperShip's desktop build uses, and the touch controls, ROM import,
-> saves and settings menu are wired up — but this port has **not yet been
-> play-tested on real phones**. Expect rough edges and please report what you see.
+> **Status:** early. The APK builds (locally and in CI), the game goes through
+> the same boot path as PaperShip's desktop build, and the touch controls, ROM
+> import, saves and settings menu are wired up — but this port has **not yet
+> been play-tested on real phones**. Expect rough edges and please report what
+> you see.
 
 ## Legal notice
 

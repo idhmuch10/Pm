@@ -18,13 +18,17 @@
 
 #ifdef __APPLE__
 #define SYM(name) "_" #name
-#else
-#define SYM(name) #name
-#endif
-
 #define DEAD_ALIAS(original) \
     __asm__(".globl " SYM(dead_##original) "\n" \
             ".set " SYM(dead_##original) ", " SYM(original) "\n");
+#else
+// ELF (Linux, Android): an assembler ".set" to a symbol defined in another
+// object file does not produce an alias, only another undefined reference.
+// The root CMakeLists.txt parses the DEAD_ALIAS(...) list below and passes
+// -Wl,--defsym=dead_X=X to the linker instead, so this file stays the single
+// source of truth for the alias list.
+#define DEAD_ALIAS(original)
+#endif
 
 // =============================================================================
 // Global variables

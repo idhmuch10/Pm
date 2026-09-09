@@ -52,7 +52,20 @@ endif()
 
 #=================== STB ===================
 set(STB_DIR ${CMAKE_BINARY_DIR}/_deps/stb)
-file(DOWNLOAD "https://github.com/nothings/stb/raw/0bc88af4de5fb022db643c2d8e549a0927749354/stb_image.h" "${STB_DIR}/stb_image.h")
+# stb_image.h (commit 0bc88af4de5fb022db643c2d8e549a0927749354) is vendored next to
+# this file: a configure-time file(DOWNLOAD) through the github.com "raw" redirect
+# silently produces an empty header behind some proxies, which breaks the build
+# much later with "use of undeclared identifier 'stbi_load_from_memory'".
+set(STB_VENDORED_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependencies/stb/stb_image.h)
+if (EXISTS ${STB_VENDORED_HEADER})
+    configure_file(${STB_VENDORED_HEADER} "${STB_DIR}/stb_image.h" COPYONLY)
+else()
+    file(DOWNLOAD "https://raw.githubusercontent.com/nothings/stb/0bc88af4de5fb022db643c2d8e549a0927749354/stb_image.h" "${STB_DIR}/stb_image.h" STATUS STB_DOWNLOAD_STATUS)
+    list(GET STB_DOWNLOAD_STATUS 0 STB_DOWNLOAD_CODE)
+    if (NOT STB_DOWNLOAD_CODE EQUAL 0)
+        message(FATAL_ERROR "Failed to download stb_image.h: ${STB_DOWNLOAD_STATUS}")
+    endif()
+endif()
 file(WRITE "${STB_DIR}/stb_impl.c" "#define STB_IMAGE_IMPLEMENTATION\n#include \"stb_image.h\"")
 
 add_library(stb STATIC)

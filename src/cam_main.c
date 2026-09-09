@@ -10,7 +10,12 @@ void render_item_entities(void);
 
 f32 CamLengthScale;
 s16 gCurrentCamID;
+#ifndef PORT
 u16* nuGfxCfb_ptr;
+#else
+// PORT: defined (and cycled every frame) by port/NuSystemShims.cpp
+extern u16* nuGfxCfb_ptr;
+#endif
 Gfx* gMainGfxPos;
 DisplayContext* gDisplayContext;
 Camera gCameras[4];

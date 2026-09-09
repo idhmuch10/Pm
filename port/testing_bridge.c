@@ -172,6 +172,10 @@ void port_testing_status_text(char* buf, size_t size) {
                       ps->pos.z, ps->actionState, ps->curSpeed);
     n = append_status(buf, size, n, "  anim %08X  flags %08X  animFlags %08X  collider h%d d%d\n", (unsigned)ps->anim,
                       (unsigned)ps->flags, (unsigned)ps->animFlags, ps->colliderHeight, ps->colliderDiameter);
+    n = append_status(buf, size, n, "  noStaticCollision %d (nesting %d)  cutsceneMove %d  inputDisabled %d  invisible %d\n",
+                      (ps->flags & PS_FLAG_NO_STATIC_COLLISION) != 0, ps->enableCollisionOverlapsCheck,
+                      (ps->flags & PS_FLAG_CUTSCENE_MOVEMENT) != 0, (ps->flags & PS_FLAG_INPUT_DISABLED) != 0,
+                      (ps->animFlags & PA_FLAG_INVISIBLE) != 0);
     n = append_status(buf, size, n, "Collision: floor %d  wall %d  inspect %d  pushing %d  floorBelow %d\n",
                       cs->curFloor, cs->curWall, cs->curInspect, cs->pushingAgainstWall, cs->floorBelow);
     n = append_status(buf, size, n, "  map colliders %d, zones %d\n", gCollisionData.numColliders,

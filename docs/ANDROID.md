@@ -92,14 +92,20 @@ adb push "Paper Mario (USA).z64" "/sdcard/Android/data/com.papership.mobile/file
   to the menu.
 * Gamepads use SDL's game controller mappings (`gamecontrollerdb.txt`).
 
-## Debugging
+## Debugging and reporting crashes
 
 * All `fprintf(stderr, ...)`/`SPDLOG` output from the port goes to logcat under the
   tag `PaperShip`.
-* A crash writes `papership_crash.log` into the data directory and logs
-  `[CRASH] SIGSEGV received` to logcat. Use `ndk-stack` with the unstripped
-  library from `app/build/intermediates/cxx/RelWithDebInfo/*/obj/arm64-v8a/libPaperShip.so`
-  to symbolise `adb logcat` tombstones.
+* A crash writes `papership_crash.log` (signal, native backtrace with function
+  names, the last 250 log lines) into the data directory, then hands the signal
+  back to Android so a full tombstone appears in `adb logcat -s DEBUG`. On the
+  next launch the app offers to **share the crash report** (any app that accepts
+  text: email, notes, a chat); paste it into a bug report.
+* Without a phone connected: the crash report is enough to locate the crash.
+  With `adb`: `adb logcat -s PaperShip DEBUG` shows the game log and the
+  tombstone; symbolise with `ndk-stack -sym <dir containing the unstripped
+  libPaperShip.so>` (CI uploads it as the `PaperShipMobile-debug-symbols`
+  artifact; locally it is under `app/build/intermediates/merged_native_libs/`).
 * The libultraship ImGui console and stats window are reachable from the
   *Debug* tab of the settings menu.
 

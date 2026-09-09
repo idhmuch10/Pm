@@ -4978,11 +4978,19 @@ void Interpreter::StartFrame() {
                          &mCurWindowPosY);
 
     // PORT: Force 4:3 rendering dimensions so the game doesn't render widescreen content.
-    // The GUI's LowResMode handles pillarboxed display of the 4:3 framebuffer.
+    // Use the largest 4:3 rectangle that fits the window: pillarboxed on wide screens,
+    // letterboxed on screens narrower than 4:3 (unfolded foldables, portrait windows).
+    // The GUI's LowResMode places the framebuffer with the same rule.
     {
-        uint32_t h = mGfxCurrentWindowDimensions.height;
-        uint32_t w43 = (uint32_t)(h * (4.0f / 3.0f));
-        uint32_t w = (w43 < mGfxCurrentWindowDimensions.width) ? w43 : mGfxCurrentWindowDimensions.width;
+        uint32_t winW = mGfxCurrentWindowDimensions.width;
+        uint32_t winH = mGfxCurrentWindowDimensions.height;
+        uint32_t w = winW;
+        uint32_t h = winH;
+        if (winW * 3 >= winH * 4) {
+            w = (uint32_t)(winH * (4.0f / 3.0f));
+        } else {
+            h = (uint32_t)(winW * (3.0f / 4.0f));
+        }
         mCurDimensions.width = (uint32_t)(w * mCurDimensions.internal_mul);
         mCurDimensions.height = (uint32_t)(h * mCurDimensions.internal_mul);
     }

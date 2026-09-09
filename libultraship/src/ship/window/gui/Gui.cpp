@@ -713,9 +713,17 @@ void Gui::DrawGame() {
     ImVec2 pos = ImVec2(0, 0);
     if (Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(CVAR_LOW_RES_MODE, 0) ==
         1) { // N64 Mode takes priority
+        // Largest 4:3 rectangle that fits: pillarbox wide windows, letterbox narrow ones
+        // (a window narrower than 4:3 used to be cropped on both sides).
         const float sw = size.y * 320.0f / 240.0f;
-        pos = ImVec2(floor(size.x / 2 - sw / 2), 0);
-        size = ImVec2(sw, size.y);
+        if (sw <= size.x) {
+            pos = ImVec2(floor(size.x / 2 - sw / 2), 0);
+            size = ImVec2(sw, size.y);
+        } else {
+            const float sh = size.x * 240.0f / 320.0f;
+            pos = ImVec2(0, floor(size.y / 2 - sh / 2));
+            size = ImVec2(size.x, sh);
+        }
     } else if (Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(
                    CVAR_PREFIX_ADVANCED_RESOLUTION ".Enabled", 0)) {
         if (!Ship::Context::GetInstance()->GetConsoleVariables()->GetInteger(

@@ -105,6 +105,35 @@ repository does the same; there are no submodules to initialise.
 * Nothing has been run on a physical device yet: boot, rendering, audio and
   input on real hardware are the next thing to test.
 
+## First device report (Galaxy Z Fold 7) and the fixes made for it
+
+The game boots, is playable through the intro up to the first Bowser fight, and
+saves. Reported problems and what was done:
+
+* **Wrong aspect ratio on the unfolded (almost square) screen.** Both
+  libultraship's forced-4:3 render size (`Interpreter::StartFrame`) and the GUI's
+  N64 mode (`Gui::DrawGame`) derived the width from the height and only
+  pillarboxed; a window narrower than 4:3 rendered at the wrong aspect and was
+  cropped on both sides. Both now use the largest 4:3 rectangle that fits
+  (letterboxing when needed).
+* **Opening logos with broken textures, invisible battle damage numbers.**
+  PaperShip is tested with the Metal backend; these are OpenGL ES-only symptoms.
+  Applied: `highp` float/int precision in the GLES fragment shader (`mediump`
+  breaks the alpha-dither noise derived from `sin(frame counter)` and
+  nearest-neighbour sampling of larger textures), `GL_EXT_depth_clamp` when
+  available (desktop GL always enables depth clamp, GLES 3.0 has none), and a
+  mirrored-repeat fallback for `GL_MIRROR_CLAMP_TO_EDGE` (an invalid enum on GLES
+  without the extension, which silently kept the previous wrap mode). These are
+  the plausible causes; confirmation needs another device run.
+* **Crash after losing the intro Bowser fight.** Cause unknown (no log yet).
+  Changes that remove Android-only differences from the desktop build: the game
+  thread now has a 64 MB stack (Java threads default to ~1 MB, desktop mains
+  have 8 MB), heap pointer tagging is disabled (`allowNativeHeapPointerTagging`),
+  and the decompiled C code is compiled at `-O1` like PaperShip's desktop build.
+  The crash handler now writes a backtrace and the last log lines to
+  `papership_crash.log`, hands the signal to the system tombstone, and the app
+  offers to share the report on the next launch.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

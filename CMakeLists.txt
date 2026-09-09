@@ -124,12 +124,13 @@ add_compile_definitions(
     _POSIX_C_SOURCE=200809L
 )
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Android")
-# Mobile GPUs/CPUs are slower than desktops: use full optimisation. The game
-# target additionally gets -fno-strict-aliasing/-fwrapv (see below) because the
-# decompiled code relies on wraparound arithmetic and type punning.
-set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+# C (the decompiled game, SDL2): -O1, the optimisation level PaperShip is tested
+# with on desktop; the decomp has undefined behaviour that higher levels can
+# exploit differently. The game target additionally gets
+# -fno-strict-aliasing/-fwrapv (see below). C++ (libultraship, port layer): -O2.
+set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O1 -g -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 else()
 set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG")

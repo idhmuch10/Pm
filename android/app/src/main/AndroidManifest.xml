@@ -25,6 +25,7 @@
         android:appCategory="game"
         android:isGame="true"
         android:hardwareAccelerated="true"
+        android:allowNativeHeapPointerTagging="false"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
 
         <!-- Let the activity see the back button so it can open the settings menu -->

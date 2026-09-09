@@ -39,3 +39,10 @@ jobs:
           name: PaperShipMobile-debug
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Upload unstripped native library (for symbolising crash reports)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PaperShipMobile-debug-symbols
+          path: android/app/build/intermediates/merged_native_libs/debug/**/libPaperShip.so
+          if-no-files-found: warn

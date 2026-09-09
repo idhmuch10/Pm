@@ -22,6 +22,10 @@ void port_android_pre_frame(void);
 /** Merge the on-screen controller state into the polled pads (OSContPad[MAXCONTROLLERS]). */
 void port_android_merge_input(void* pads);
 
+/** Crash diagnostics: native backtrace and the most recent log lines (also sent to logcat). */
+void port_android_write_backtrace(void* file);
+void port_android_dump_recent_log(void* file);
+
 #ifdef __cplusplus
 }
 #endif

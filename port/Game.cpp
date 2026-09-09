@@ -25,6 +25,7 @@
 #include "android/AndroidPort.h"
 #endif
 #include "port_paths.h"
+#include "build.h"
 
 extern "C" {
 #include "common.h"
@@ -311,8 +312,24 @@ int main(int argc, char* argv[]) {
         }
         free(symbols);
 #endif
+#ifdef __ANDROID__
+        if (crashFile) {
+            fprintf(crashFile, "PaperShip Mobile crash: %s\nBuild: %s (%s %s)\n\n", sigName, gBuildVersion,
+                    gGitBranch, gGitCommitHash);
+            port_android_write_backtrace(crashFile);
+            port_android_dump_recent_log(crashFile);
+        } else {
+            port_android_write_backtrace(nullptr);
+        }
+#endif
         if (crashFile) { fclose(crashFile); }
         fflush(stderr);
+#ifdef __ANDROID__
+        // Hand the signal back to the system so debuggerd writes a full tombstone
+        // (visible with `adb logcat -s DEBUG`), then die.
+        signal(sig, SIG_DFL);
+        raise(sig);
+#endif
         _exit(1);
     };
     signal(SIGSEGV, crashHandler);

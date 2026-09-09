@@ -15,10 +15,12 @@ import android.widget.Toast;
 import org.libsdl.app.SDLActivity;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * PaperShip Mobile entry point.
@@ -39,6 +41,8 @@ public class MainActivity extends SDLActivity {
     private static final String PREF_TOUCH_VISIBLE = "touch_controls_visible";
     private static final int REQUEST_PICK_ROM = 0x5052;
     private static final String[] BUNDLED_FILES = { "papership.o2r", "gamecontrollerdb.txt" };
+    private static final String CRASH_LOG_NAME = "papership_crash.log";
+    private static final int CRASH_LOG_SHARE_LIMIT = 200 * 1024;
 
     private TouchControlsView mTouchControls;
     private volatile boolean mSetupDone = false;
@@ -70,8 +74,59 @@ public class MainActivity extends SDLActivity {
 
         new Thread(() -> {
             copyBundledFiles();
-            runOnUiThread(this::checkRom);
+            runOnUiThread(() -> {
+                offerCrashReport();
+                checkRom();
+            });
         }, "papership-setup").start();
+    }
+
+    /**
+     * The native crash handler writes papership_crash.log (signal, backtrace, recent log)
+     * into the data directory. Offer to share it so crashes can be reported without adb.
+     */
+    private void offerCrashReport() {
+        File crashLog = new File(getGameDataDir(), CRASH_LOG_NAME);
+        if (!crashLog.isFile() || crashLog.length() == 0 || isFinishing()) {
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.crash_dialog_title)
+                .setMessage(R.string.crash_dialog_message)
+                .setPositiveButton(R.string.crash_dialog_share, (dialog, which) -> {
+                    shareCrashReport(crashLog);
+                    crashLog.delete();
+                })
+                .setNegativeButton(R.string.crash_dialog_dismiss, (dialog, which) -> crashLog.delete())
+                .show();
+    }
+
+    private void shareCrashReport(File crashLog) {
+        String report;
+        try (InputStream in = new FileInputStream(crashLog)) {
+            byte[] data = new byte[(int) Math.min(crashLog.length(), CRASH_LOG_SHARE_LIMIT)];
+            int total = 0;
+            while (total < data.length) {
+                int read = in.read(data, total, data.length - total);
+                if (read < 0) {
+                    break;
+                }
+                total += read;
+            }
+            report = new String(data, 0, total, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent share = new Intent(Intent.ACTION_SEND);
+        share.setType("text/plain");
+        share.putExtra(Intent.EXTRA_SUBJECT, "PaperShip Mobile crash report");
+        share.putExtra(Intent.EXTRA_TEXT, report);
+        try {
+            startActivity(Intent.createChooser(share, getString(R.string.crash_dialog_share)));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, "No app available to share the report", Toast.LENGTH_LONG).show();
+        }
     }
 
     SharedPreferences getPrefs() {

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <cstring>
 
 #include <map>
 #include <unordered_map>
@@ -279,7 +280,9 @@ std::string GfxRenderingAPIOGL::BuildFsShader(const CCFeatures& cc_features) {
         { "texture", "texture" },
         { "vOutColor", "vOutColor" },
 #elif defined(USE_OPENGLES)
-        { "GLSL_VERSION", "#version 300 es\nprecision mediump float;" },
+        // highp: mediump (16-bit) floats break the alpha-dither noise (sin of the frame
+        // counter) and nearest-neighbour sampling of large textures on mobile GPUs.
+        { "GLSL_VERSION", "#version 300 es\nprecision highp float;\nprecision highp int;" },
         { "attr", "in" },
         { "opengles", true },
         { "core_opengl", false },
@@ -547,6 +550,26 @@ void GfxRenderingAPIOGL::UploadTexture(const uint8_t* rgba32_buf, uint32_t width
 
 #ifdef USE_OPENGLES
 #define GL_MIRROR_CLAMP_TO_EDGE 0x8743
+#define GL_DEPTH_CLAMP_EXT 0x864F
+// OpenGL ES only has these as extensions; detected once at init (see Init()).
+static bool sGlesHasMirrorClampToEdge = false;
+static bool sGlesHasDepthClamp = false;
+
+static bool gles_has_extension(const char* name) {
+    const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    if (extensions == nullptr) {
+        return false;
+    }
+    const size_t len = strlen(name);
+    for (const char* p = extensions; (p = strstr(p, name)) != nullptr; p += len) {
+        const bool startOk = (p == extensions) || (p[-1] == ' ');
+        const bool endOk = (p[len] == ' ') || (p[len] == '\0');
+        if (startOk && endOk) {
+            return true;
+        }
+    }
+    return false;
+}
 #endif
 
 static uint32_t gfx_cm_to_opengl(uint32_t val) {
@@ -556,7 +579,13 @@ static uint32_t gfx_cm_to_opengl(uint32_t val) {
         case G_TX_MIRROR | G_TX_WRAP:
             return GL_MIRRORED_REPEAT;
         case G_TX_MIRROR | G_TX_CLAMP:
+#ifdef USE_OPENGLES
+            // GL_INVALID_ENUM on GLES without the extension, which would leave the
+            // previous wrap mode in place; mirrored repeat is the closest fallback.
+            return sGlesHasMirrorClampToEdge ? GL_MIRROR_CLAMP_TO_EDGE : GL_MIRRORED_REPEAT;
+#else
             return GL_MIRROR_CLAMP_TO_EDGE;
+#endif
         case G_TX_NOMIRROR | G_TX_WRAP:
             return GL_REPEAT;
     }
@@ -670,6 +699,12 @@ void GfxRenderingAPIOGL::Init() {
 
 #ifndef USE_OPENGLES // not supported on gles
     glEnable(GL_DEPTH_CLAMP);
+#else
+    sGlesHasMirrorClampToEdge = gles_has_extension("GL_EXT_texture_mirror_clamp_to_edge");
+    sGlesHasDepthClamp = gles_has_extension("GL_EXT_depth_clamp");
+    if (sGlesHasDepthClamp) {
+        glEnable(GL_DEPTH_CLAMP_EXT);
+    }
 #endif
     glDepthFunc(GL_LEQUAL);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

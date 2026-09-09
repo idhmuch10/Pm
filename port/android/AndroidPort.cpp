@@ -13,13 +13,17 @@
 
 #include <jni.h>
 #include <android/log.h>
+#include <dlfcn.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <unwind.h>
 #include <atomic>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <deque>
+#include <mutex>
 #include <string>
 
 // libultraship's umbrella header must be seen before common.h is included with
@@ -50,9 +54,20 @@ static std::atomic<int> sTouchStickY{ 0 };
 static std::atomic<int> sMenuToggleRequests{ 0 };
 
 // ---------------------------------------------------------------------------
-// stdout/stderr -> logcat
+// stdout/stderr -> logcat (+ a ring buffer of recent lines for crash reports)
 // ---------------------------------------------------------------------------
 static int sLogPipe[2] = { -1, -1 };
+static std::mutex sRecentLogMutex;
+static std::deque<std::string> sRecentLog;
+static constexpr size_t kRecentLogLines = 250;
+
+static void RememberLogLine(const std::string& line) {
+    std::lock_guard<std::mutex> lock(sRecentLogMutex);
+    sRecentLog.push_back(line);
+    while (sRecentLog.size() > kRecentLogLines) {
+        sRecentLog.pop_front();
+    }
+}
 
 static void* LogcatPumpThread(void*) {
     char buf[1024];
@@ -71,11 +86,13 @@ static void* LogcatPumpThread(void*) {
         for (ssize_t i = 0; i < n; i++) {
             if (buf[i] == '\n') {
                 __android_log_write(ANDROID_LOG_INFO, LOG_TAG, line.c_str());
+                RememberLogLine(line);
                 line.clear();
             } else {
                 line.push_back(buf[i]);
                 if (line.size() >= 4000) { // logcat truncates very long lines
                     __android_log_write(ANDROID_LOG_INFO, LOG_TAG, line.c_str());
+                    RememberLogLine(line);
                     line.clear();
                 }
             }
@@ -105,6 +122,78 @@ extern "C" void port_android_init(void) {
         pthread_attr_destroy(&attr);
     }
     __android_log_write(ANDROID_LOG_INFO, LOG_TAG, "PaperShip native library initialized");
+}
+
+// ---------------------------------------------------------------------------
+// Crash diagnostics
+// ---------------------------------------------------------------------------
+struct BacktraceState {
+    void** current;
+    void** end;
+};
+
+static _Unwind_Reason_Code UnwindCallback(struct _Unwind_Context* context, void* arg) {
+    BacktraceState* state = static_cast<BacktraceState*>(arg);
+    uintptr_t pc = _Unwind_GetIP(context);
+    if (pc != 0) {
+        if (state->current == state->end) {
+            return _URC_END_OF_STACK;
+        }
+        *state->current++ = reinterpret_cast<void*>(pc);
+    }
+    return _URC_NO_REASON;
+}
+
+extern "C" void port_android_write_backtrace(void* filePtr) {
+    FILE* file = static_cast<FILE*>(filePtr);
+    void* frames[64];
+    BacktraceState state = { frames, frames + 64 };
+    _Unwind_Backtrace(UnwindCallback, &state);
+    size_t count = state.current - frames;
+
+    if (file != nullptr) {
+        fprintf(file, "Backtrace (%zu frames):\n", count);
+    }
+    for (size_t i = 0; i < count; i++) {
+        Dl_info info;
+        char line[512];
+        if (dladdr(frames[i], &info) != 0 && info.dli_fname != nullptr) {
+            uintptr_t offset = reinterpret_cast<uintptr_t>(frames[i]) - reinterpret_cast<uintptr_t>(info.dli_fbase);
+            const char* file_name = strrchr(info.dli_fname, '/');
+            file_name = file_name ? file_name + 1 : info.dli_fname;
+            if (info.dli_sname != nullptr) {
+                uintptr_t symOffset =
+                    reinterpret_cast<uintptr_t>(frames[i]) - reinterpret_cast<uintptr_t>(info.dli_saddr);
+                snprintf(line, sizeof(line), "  #%02zu pc %08lx %s (%s+%lu)", i, (unsigned long)offset, file_name,
+                         info.dli_sname, (unsigned long)symOffset);
+            } else {
+                snprintf(line, sizeof(line), "  #%02zu pc %08lx %s", i, (unsigned long)offset, file_name);
+            }
+        } else {
+            snprintf(line, sizeof(line), "  #%02zu pc %p", i, frames[i]);
+        }
+        __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, line);
+        if (file != nullptr) {
+            fprintf(file, "%s\n", line);
+        }
+    }
+}
+
+extern "C" void port_android_dump_recent_log(void* filePtr) {
+    FILE* file = static_cast<FILE*>(filePtr);
+    if (file == nullptr) {
+        return;
+    }
+    // Called from a signal handler: never block on the mutex.
+    if (!sRecentLogMutex.try_lock()) {
+        fprintf(file, "(recent log unavailable: log mutex busy)\n");
+        return;
+    }
+    fprintf(file, "\nLast %zu log lines before the crash:\n", sRecentLog.size());
+    for (const auto& line : sRecentLog) {
+        fprintf(file, "%s\n", line.c_str());
+    }
+    sRecentLogMutex.unlock();
 }
 
 extern "C" void port_android_wait_for_setup(void) {

@@ -7,4 +7,8 @@
     <string name="rom_dialog_quit">Quit</string>
     <string name="rom_import_failed">ROM import failed: %1$s</string>
     <string name="rom_importing">Importing ROM…</string>
+    <string name="crash_dialog_title">The game crashed last time</string>
+    <string name="crash_dialog_message">A crash report (signal, native backtrace and the last log lines) was saved. Share it with the developers to help fix the crash.</string>
+    <string name="crash_dialog_share">Share report</string>
+    <string name="crash_dialog_dismiss">Dismiss</string>
 </resources>

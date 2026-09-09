@@ -709,7 +709,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     // Start up the C app thread and enable sensor input for the first time
                     // FIXME: Why aren't we enabling sensor input at start?
 
-                    mSDLThread = new Thread(new SDLMain(), "SDLThread");
+                    // PaperShip Mobile: the decompiled game and libultraship expect a
+                    // desktop-sized stack (8 MB+); Java threads default to about 1 MB.
+                    mSDLThread = new Thread(null, new SDLMain(), "SDLThread", 64L * 1024L * 1024L);
                     mSurface.enableSensor(Sensor.TYPE_ACCELEROMETER, true);
                     mSDLThread.start();
 

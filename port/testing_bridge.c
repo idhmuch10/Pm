@@ -195,6 +195,11 @@ void port_testing_status_text(char* buf, size_t size) {
 }
 
 int port_testing_request_report(char* msg, size_t msgSize) {
+    char status[1024];
+
+    // Put the live status into the log so it travels with the report.
+    port_testing_status_text(status, sizeof(status));
+    fprintf(stderr, "[status] report requested\n%s", status);
     fflush(stdout);
     fflush(stderr);
 #ifdef __ANDROID__

@@ -456,6 +456,13 @@ IMG_PTR spr_get_player_raster(s32 rasterIndex, s32 playerSpriteID) {
     }
 
     if (idx == -1) {
+#ifdef PORT
+        static int sLogCount = 0;
+        if (sLogCount++ < 5) {
+            fprintf(stderr, "[spr_get_player_raster] WARNING: raster cache full (size %d), raster %d of sprite %d not drawn\n",
+                    PlayerRasterCacheSize, rasterIndex, playerSpriteID);
+        }
+#endif
         return nullptr;
     }
 

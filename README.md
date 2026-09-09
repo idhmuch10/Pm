@@ -21,7 +21,10 @@ picker.
 > build logs every session and, after a crash, offers the report on the next
 > launch (Copy / Save to Downloads / Share) — please send it if anything still
 > crashes. The settings menu has a Testing tab with quick save/load and a warp
-> straight to that fight.
+> straight to that fight, plus "Save report now" and a live collision readout
+> for bugs that do not crash (currently under investigation: doors that can be
+> walked through, the partner sinking into the ground, Mario invisible in the
+> Star Spirits' revival scene).
 
 ## Legal notice
 

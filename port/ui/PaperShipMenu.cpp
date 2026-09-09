@@ -132,6 +132,17 @@ static void DrawTestingTab() {
     ImGui::EndDisabled();
 
     ImGui::Separator();
+    ImGui::Text("Diagnostics");
+    if (ImGui::Button("Save report (current log) now", ImVec2(-1, 0))) {
+        port_testing_request_report(sTestingStatus, sizeof(sTestingStatus));
+    }
+    if (ImGui::CollapsingHeader("Live status (collision, partner, sprite)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static char sLiveStatus[1024];
+        port_testing_status_text(sLiveStatus, sizeof(sLiveStatus));
+        ImGui::TextWrapped("%s", sLiveStatus);
+    }
+
+    ImGui::Separator();
     ImGui::Text("Presets");
     ImGui::BeginDisabled(!inWorld);
     if (ImGui::Button("Intro: Bowser confrontation (kkj_13)", ImVec2(-1, 0))) {

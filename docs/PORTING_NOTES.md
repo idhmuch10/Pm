@@ -182,6 +182,25 @@ same reason. The ROM-offset fix from the third round was real and necessary
 (effect graphics really were loaded from the wrong place), but it could not
 show on a device while this check discarded the instances.
 
+### Fifth round: effects confirmed, three new reports
+
+The device confirmed the previous two fixes: damage numbers render and the
+Star Rod power-up no longer crashes. Three new problems were reported, none
+of which crashes, so no report was produced: Mario is invisible in the
+Star Spirits' revival scene (`kmr_00`, `ANIM_Mario1_Fallen`), the partner
+"clips everywhere", and doors can be walked through. The collision loader,
+the wall test (`player_test_move_with_slipping`), the trigger code and the
+revival script are platform-neutral on reading, and the earlier ARM-only
+suspects (FMA contraction, float-to-int saturation) are ruled out because
+upstream runs on Apple Silicon. To get device data without a crash, the
+Testing tab now has **Save report (current log) now** (a JNI call from the
+game thread into `MainActivity.requestReport()`, which shows the usual
+Copy / Save / Share dialog with the running session's log) and a **Live
+status** readout (player position/state/flags, `gCollisionStatus` ids,
+collider counts, partner position/floor). The port also logs the collider
+and vertex counts of every map, player animations without animation data,
+and a full player raster cache.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

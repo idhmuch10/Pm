@@ -411,6 +411,32 @@ extern "C" void port_android_merge_input(void* padsPtr) {
 // ---------------------------------------------------------------------------
 extern "C" {
 
+void port_android_request_report(void) {
+    // SDL keeps a JNIEnv for the thread that runs SDL_main (the game thread).
+    JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    jobject activity = static_cast<jobject>(SDL_AndroidGetActivity());
+    if (env == nullptr || activity == nullptr) {
+        fprintf(stderr, "[android] report requested but no JNI environment is available\n");
+        return;
+    }
+    jclass cls = env->GetObjectClass(activity);
+    jmethodID method = cls != nullptr ? env->GetMethodID(cls, "requestReport", "()V") : nullptr;
+    if (method != nullptr) {
+        env->CallVoidMethod(activity, method);
+    }
+    if (env->ExceptionCheck()) {
+        env->ExceptionDescribe();
+        env->ExceptionClear();
+        fprintf(stderr, "[android] MainActivity.requestReport() threw\n");
+    } else if (method == nullptr) {
+        fprintf(stderr, "[android] MainActivity.requestReport() not found\n");
+    }
+    if (cls != nullptr) {
+        env->DeleteLocalRef(cls);
+    }
+    env->DeleteLocalRef(activity);
+}
+
 JNIEXPORT void JNICALL Java_com_papership_mobile_MainActivity_nativeSetDataDir(JNIEnv* env, jclass, jstring dir) {
     if (dir != nullptr) {
         const char* path = env->GetStringUTFChars(dir, nullptr);

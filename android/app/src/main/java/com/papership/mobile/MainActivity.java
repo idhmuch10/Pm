@@ -182,28 +182,50 @@ public class MainActivity extends SDLActivity {
         if ((!haveCrashLog && !previousRunCrashed) || isFinishing()) {
             return;
         }
-        final String report = buildReport(crashLog);
+        final String report = buildReport(crashLog, false);
+        showReportDialog(getString(R.string.crash_dialog_title), getString(R.string.crash_dialog_message), report,
+                crashLog::delete);
+    }
+
+    /**
+     * Called from native code (port/android/AndroidPort.cpp) when "Save report now" is
+     * chosen in the settings menu: offers the current session log without needing a crash.
+     */
+    public void requestReport() {
+        runOnUiThread(() -> {
+            if (isFinishing()) {
+                return;
+            }
+            File crashLog = new File(getGameDataDir(), CRASH_LOG_NAME);
+            String report = buildReport(crashLog, true);
+            showReportDialog(getString(R.string.report_dialog_title), getString(R.string.report_dialog_message),
+                    report, null);
+        });
+    }
+
+    private void showReportDialog(String title, String message, final String report, final Runnable onDone) {
+        Runnable done = onDone != null ? onDone : () -> { };
         new AlertDialog.Builder(this)
-                .setTitle(R.string.crash_dialog_title)
-                .setMessage(R.string.crash_dialog_message)
+                .setTitle(title)
+                .setMessage(message)
                 .setPositiveButton(R.string.crash_dialog_copy, (dialog, which) -> {
                     copyToClipboard(report);
-                    crashLog.delete();
+                    done.run();
                 })
                 .setNeutralButton(R.string.crash_dialog_save, (dialog, which) -> {
                     saveReportToDownloads(report);
-                    crashLog.delete();
+                    done.run();
                 })
                 .setNegativeButton(R.string.crash_dialog_share, (dialog, which) -> {
                     shareReport(report);
-                    crashLog.delete();
+                    done.run();
                 })
                 .setCancelable(true)
-                .setOnCancelListener(dialog -> crashLog.delete())
+                .setOnCancelListener(dialog -> done.run())
                 .show();
     }
 
-    private String buildReport(File crashLog) {
+    private String buildReport(File crashLog, boolean includeCurrentLog) {
         StringBuilder report = new StringBuilder();
         report.append("PaperShip Mobile report, ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
                 .append(", Android ").append(Build.VERSION.RELEASE).append('\n');
@@ -211,10 +233,17 @@ public class MainActivity extends SDLActivity {
             report.append("\n----- papership_crash.log -----\n");
             report.append(readTail(crashLog, REPORT_CRASH_LIMIT));
         }
+        if (includeCurrentLog) {
+            File current = new File(getGameDataDir(), SESSION_LOG_NAME);
+            if (current.isFile()) {
+                report.append("\n----- current session log (tail) -----\n");
+                report.append(readTail(current, REPORT_LOG_TAIL));
+            }
+        }
         File previous = new File(getGameDataDir(), PREVIOUS_LOG_NAME);
         if (previous.isFile()) {
             report.append("\n----- last session log (tail) -----\n");
-            report.append(readTail(previous, REPORT_LOG_TAIL));
+            report.append(readTail(previous, includeCurrentLog ? REPORT_CRASH_LIMIT : REPORT_LOG_TAIL));
         }
         return report.toString();
     }

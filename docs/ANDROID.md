@@ -110,6 +110,19 @@ The settings menu (MENU pill or back button) has a **Testing** tab:
 A real "save state" (full memory snapshot) is not feasible in a decomp port: the
 game state is spread over static memory, malloc'd buffers and the renderer.
 
+The **Diagnostics** part of the same tab has two tools for reporting bugs that
+do not crash the game:
+
+* **Save report (current log) now** opens the same Copy / Save to Downloads /
+  Share dialog as after a crash, but with the log of the *running* session.
+  Open the menu right after the problem happened (during a cutscene is fine)
+  and save or share the report.
+* **Live status** shows the player position, action state and flags, the
+  collision ids the game currently sees (floor, wall, inspect target, pushing),
+  the collider count of the map and the partner's position/floor. When Mario
+  walks through a door, open the menu while pushing against it: `wall` should
+  name the door's collider; `-1` means the wall test did not hit it at all.
+
 ## Debugging and reporting crashes
 
 * All `fprintf(stderr, ...)`/`SPDLOG` output from the port goes to logcat under the

@@ -873,6 +873,13 @@ s32 spr_update_player_sprite(s32 spriteInstanceID, s32 animID, f32 timeScale) {
             sd = PlayerSprites[spriteIdx - 1];
         }
         animList = sd->animListStart[animIndex];
+        if (animList == NULL || animList == PTR_LIST_END) {
+            static int sLogCount = 0;
+            if (sLogCount++ < 5) {
+                fprintf(stderr, "[spr_update_player_sprite] WARNING: no animation data for animID=0x%X (sprite %d, anim %d)\n",
+                        animID, spriteIdx, animIndex);
+            }
+        }
     }
 #else
     spriteData = (u32*)PlayerSprites[spriteIdx];

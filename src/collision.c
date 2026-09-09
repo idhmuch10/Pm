@@ -2,6 +2,7 @@
 #include "model.h"
 #ifdef PORT
 #include "port/port_endian.h"
+#include <stdio.h>
 #endif
 
 typedef struct HitFile {
@@ -346,6 +347,11 @@ void load_hit_data(s32 idx, HitFile* hit) {
             }
         }
     }
+#ifdef PORT
+    fprintf(stderr, "[collision] loaded %s: %d colliders, %d vertices, %d aabb words\n",
+            idx == 0 ? "colliders" : "zones", assetCollisionData->numColliders, assetCollisionData->numVertices,
+            assetCollisionData->boundingBoxesDataSize);
+#endif
 }
 
 void parent_collider_to_model(s16 colliderID, s16 modelIndex) {

@@ -523,6 +523,9 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
               -Wno-deprecated-enum-enum-conversion
           >
       )
+      # The N64 (MIPS), x86 and Apple's arm64 ABI all make plain `char` signed; the
+      # Android arm64 ABI makes it unsigned. Match the original game's behaviour.
+      target_compile_options(${PROJECT_NAME} PRIVATE -fsigned-char)
       target_compile_definitions(${PROJECT_NAME} PRIVATE PORT_ANDROID=1)
       # SDL2 comes from libultraship's FetchContent build; the rest are NDK system libraries.
       target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2 GLESv3 EGL log android)

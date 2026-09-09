@@ -5,10 +5,19 @@
 
 #include "ultra64.h"
 
+/*
+ * Every stub must have a non-zero size. Zero-length objects are legal in GNU C, but
+ * ELF linkers (Linux, Android) give consecutive zero-length symbols the *same*
+ * address: in the Android build 3111 stubs collapsed onto 14 addresses, so
+ * resolve_rom_offset() returned the offset of whichever table entry happened to
+ * come first (effects, logos and other DMA'd data loaded from the wrong place).
+ * macOS's linker keeps zero-length symbols apart, which is why the original port
+ * never noticed. One byte per stub is enough to keep the addresses distinct.
+ */
 #define DEFINE_SEGMENT(n) \
-    u8 n##_ROM_START[0] __attribute__((weak)); \
-    u8 n##_ROM_END[0] __attribute__((weak)); \
-    u8 n##_VRAM[0] __attribute__((weak));
+    u8 n##_ROM_START[1] __attribute__((weak)); \
+    u8 n##_ROM_END[1] __attribute__((weak)); \
+    u8 n##_VRAM[1] __attribute__((weak));
 
 /**
  * DEFINE_SEGMENT_RANGED: For segments where game code does pointer arithmetic
@@ -20,23 +29,23 @@
  */
 #define DEFINE_SEGMENT_RANGED(n, rom_size) \
     u8 n##_ROM_START[rom_size] __attribute__((weak)); \
-    u8 n##_ROM_END[0] __attribute__((weak)); \
-    u8 n##_VRAM[0] __attribute__((weak));
+    u8 n##_ROM_END[1] __attribute__((weak)); \
+    u8 n##_VRAM[1] __attribute__((weak));
 
 #define DEFINE_OVERLAY(n) \
-    u8 n##_ROM_START[0] __attribute__((weak)); \
-    u8 n##_ROM_END[0] __attribute__((weak)); \
-    u8 n##_VRAM[0] __attribute__((weak)); \
-    u8 n##_TEXT_START[0] __attribute__((weak)); \
-    u8 n##_TEXT_END[0] __attribute__((weak)); \
-    u8 n##_DATA_START[0] __attribute__((weak)); \
-    u8 n##_RODATA_END[0] __attribute__((weak)); \
-    u8 n##_BSS_START[0] __attribute__((weak)); \
-    u8 n##_BSS_END[0] __attribute__((weak));
+    u8 n##_ROM_START[1] __attribute__((weak)); \
+    u8 n##_ROM_END[1] __attribute__((weak)); \
+    u8 n##_VRAM[1] __attribute__((weak)); \
+    u8 n##_TEXT_START[1] __attribute__((weak)); \
+    u8 n##_TEXT_END[1] __attribute__((weak)); \
+    u8 n##_DATA_START[1] __attribute__((weak)); \
+    u8 n##_RODATA_END[1] __attribute__((weak)); \
+    u8 n##_BSS_START[1] __attribute__((weak)); \
+    u8 n##_BSS_END[1] __attribute__((weak));
 
 /* Bare data symbols (not ROM segments - used as offset markers within imgfx_data) */
 #define DEFINE_DATA_SYMBOL(n) \
-    u8 n[0] __attribute__((weak));
+    u8 n[1] __attribute__((weak));
 
 DEFINE_DATA_SYMBOL(shock_header)
 DEFINE_DATA_SYMBOL(shiver_header)

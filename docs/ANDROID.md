@@ -133,6 +133,33 @@ game state is spread over static memory, malloc'd buffers and the renderer.
 * The libultraship ImGui console and stats window are reachable from the
   *Debug* tab of the settings menu.
 
+## Self-test without a phone
+
+`PAPERSHIP_SELFTEST=1` makes the desktop build verify itself instead of booting
+the game, and needs no ROM:
+
+* `port/rom_offsets.c` checks that every N64 linker symbol resolves to its own
+  ROM offset (this is the check that would have caught the invisible damage
+  numbers: zero-length stub symbols shared addresses on Android/Linux, see
+  `docs/PORTING_NOTES.md`);
+* `port/ShaderSelfTest.cpp` renders every combiner mode the game uses (136
+  pairs, generated into `port/shader_selftest_cases.inc` by
+  `tools/port/gen_shader_selftest.py`; re-run it after adding combine modes)
+  under a matrix of render/alpha/fog/cycle modes and counts shader compile or
+  link failures. On a `-DUSE_OPENGLES=ON` Linux build this exercises the same
+  GLSL ES 3.00 shader path as Android.
+
+```sh
+cmake -S . -B build-gles -G Ninja -DCMAKE_BUILD_TYPE=Release -DUSE_OPENGLES=ON
+ninja -C build-gles PaperShip
+cp papership.o2r gamecontrollerdb.txt build-gles/     # port assets next to the binary
+cd build-gles && PAPERSHIP_SELFTEST=1 SDL_AUDIODRIVER=dummy \
+    LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./PaperShip   # exit code 0 = passed
+```
+
+The same run is part of CI (`selftest-linux` job). Every normal boot also
+prints one `[rom_offsets]` summary line to the session log.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

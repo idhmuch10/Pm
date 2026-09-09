@@ -117,7 +117,9 @@ saves. Reported problems and what was done:
   cropped on both sides. Both now use the largest 4:3 rectangle that fits
   (letterboxing when needed).
 * **Opening logos with broken textures, invisible battle damage numbers.**
-  PaperShip is tested with the Metal backend; these are OpenGL ES-only symptoms.
+  (The real cause turned out to be the ROM-offset lookup, see the third round
+  below; the changes here are still valid GLES fixes.)
+  PaperShip is tested with the Metal backend; these looked like OpenGL ES-only symptoms.
   Applied: `highp` float/int precision in the GLES fragment shader (`mediump`
   breaks the alpha-dither noise derived from `sin(frame counter)` and
   nearest-neighbour sampling of larger textures), `GL_EXT_depth_clamp` when

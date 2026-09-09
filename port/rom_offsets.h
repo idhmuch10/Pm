@@ -27,6 +27,12 @@ extern "C" {
 u32 resolve_rom_offset(const void* stub_addr);
 
 /**
+ * Check that every mapping resolves to its own offset (logs a summary line).
+ * Returns the number of wrong resolutions; 0 means the stub symbols are unique.
+ */
+int rom_offsets_selfcheck(int verbose);
+
+/**
  * Byte-swap macros for big-endian ROM data on little-endian PC.
  * N64 ROM data is big-endian. On PC (little-endian), multi-byte fields
  * read from ROM must be byte-swapped.

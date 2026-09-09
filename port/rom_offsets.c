@@ -6,6 +6,7 @@
 #ifdef PORT
 
 #include "ultra64.h"
+#include <stdio.h>
 #include "ld_addrs.h"
 
 // Forward declarations for symbols in ld_addrs_stubs.c not in ld_addrs.h
@@ -2186,6 +2187,31 @@ u32 resolve_rom_offset(const void* addr) {
     }
 
     return 0xFFFFFFFF;
+}
+
+/*
+ * Verify that every table entry resolves back to its own offset. Zero-length stub
+ * symbols used to share addresses on ELF targets (see port/ld_addrs_stubs.c), which
+ * silently loaded the wrong ROM data; this catches any regression at boot and is
+ * part of PAPERSHIP_SELFTEST. Returns the number of entries that resolve wrongly.
+ */
+int rom_offsets_selfcheck(int verbose) {
+    int bad = 0;
+    int shown = 0;
+    for (int i = 0; i < (int)ROM_MAPPING_COUNT; i++) {
+        u32 got = resolve_rom_offset(sRomMappings[i].addr);
+        if (got != sRomMappings[i].offset) {
+            bad++;
+            if (verbose || shown < 8) {
+                fprintf(stderr, "[rom_offsets] entry %d (stub %p) resolves to 0x%X, expected 0x%X\n", i,
+                        sRomMappings[i].addr, got, sRomMappings[i].offset);
+                shown++;
+            }
+        }
+    }
+    fprintf(stderr, "[rom_offsets] %d mappings, %d resolve to the wrong offset%s\n", (int)ROM_MAPPING_COUNT, bad,
+            bad ? " (stub symbols share addresses; see port/ld_addrs_stubs.c)" : "");
+    return bad;
 }
 
 #endif

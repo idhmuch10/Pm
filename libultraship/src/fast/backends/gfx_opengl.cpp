@@ -380,6 +380,9 @@ static std::string BuildVsShader(const CCFeatures& cc_features) {
     return result;
 }
 
+// Number of shader programs that failed to compile or link (read by the self-test).
+int gGfxOglShaderFailures = 0;
+
 // Diagnostics for shader failures. PaperShip is tested with Metal; the GLSL path
 // (desktop OpenGL and, on Android, GLSL ES) had never been exercised, and a compile
 // failure used to abort() without printing the source.
@@ -439,6 +442,7 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         gfx_opengl_log_shader_failure("vertex", vertex_shader, vs_buf.data(), vs_buf.size(), shader_id0, shader_id1);
+        gGfxOglShaderFailures++;
         abort();
     }
 
@@ -451,6 +455,7 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
                                       shader_id1);
         fprintf(stderr, "[GfxOGL] using an empty fallback fragment shader for id0=%016llx id1=%08x\n",
                 (unsigned long long)shader_id0, shader_id1);
+        gGfxOglShaderFailures++;
         const std::string fallback = gfx_opengl_fallback_fs_source();
         const GLchar* fallbackSource = fallback.data();
         const GLint fallbackLength = (GLint)fallback.size();
@@ -482,6 +487,7 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
         }
         fprintf(stderr, "[GfxOGL] shader program LINK FAILED for id0=%016llx id1=%08x\n%s\n",
                 (unsigned long long)shader_id0, shader_id1, infoLog.data());
+        gGfxOglShaderFailures++;
         gfx_opengl_log_shader_failure("vertex (link failure)", vertex_shader, vs_buf.data(), vs_buf.size(),
                                       shader_id0, shader_id1);
         gfx_opengl_log_shader_failure("fragment (link failure)", fragment_shader, fs_buf.data(), fs_buf.size(),
@@ -756,6 +762,16 @@ void GfxRenderingAPIOGL::Init() {
 #ifndef __linux__
     glewInit();
 #endif
+
+    // Identify the driver in the log (on Android this ends up in the session log that
+    // the crash report dialog collects).
+    {
+        const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        const char* glsl = reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
+        fprintf(stderr, "[GfxOGL] GL_VERSION=\"%s\" GL_RENDERER=\"%s\" GLSL=\"%s\"\n", version ? version : "?",
+                renderer ? renderer : "?", glsl ? glsl : "?");
+    }
 
     glGenBuffers(1, &mOpenglVbo);
     glBindBuffer(GL_ARRAY_BUFFER, mOpenglVbo);

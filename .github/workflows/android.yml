@@ -46,3 +46,56 @@ jobs:
           name: PaperShipMobile-debug-symbols
           path: android/app/build/intermediates/merged_native_libs/debug/**/libPaperShip.so
           if-no-files-found: warn
+
+  selftest:
+    name: Linux GLES self-test (ROM offsets + shaders)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang ninja-build cmake pkg-config xvfb mesa-utils \
+            libsdl2-dev libgles-dev libegl-dev libgl1-mesa-dev libgl1-mesa-dri libglew-dev libglvnd-dev \
+            libspdlog-dev libfmt-dev libtinyxml2-dev libzip-dev nlohmann-json3-dev libpng-dev \
+            libtcc-dev catch2 libpulse-dev libasound2-dev libdbus-1-dev libudev-dev
+
+      - name: Configure (OpenGL ES 3 like Android)
+        run: >
+          cmake -S . -B build-gles -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DUSE_OPENGLES=ON
+
+      - name: Build
+        run: ninja -C build-gles PaperShip
+
+      - name: Pack port assets
+        run: |
+          python3 tools/port/pack_o2r.py assets/port build-gles/papership.o2r
+          curl -fsSL -o build-gles/gamecontrollerdb.txt \
+            https://raw.githubusercontent.com/gabomdq/SDL_GameControllerDB/master/gamecontrollerdb.txt \
+            || echo "# gamecontrollerdb.txt could not be downloaded" > build-gles/gamecontrollerdb.txt
+
+      - name: Run self-test under Xvfb (Mesa llvmpipe)
+        working-directory: build-gles
+        env:
+          PAPERSHIP_SELFTEST: "1"
+          SDL_AUDIODRIVER: dummy
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          set +e
+          xvfb-run -a -s "-screen 0 1280x720x24" ./PaperShip > selftest.log 2>&1
+          status=$?
+          grep -E "\[(rom_offsets|selftest)\]|GL_VERSION|FAILED|LINK FAILED" selftest.log | grep -v "new shader" || true
+          echo "PaperShip exit code: $status"
+          exit $status
+
+      - name: Upload self-test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-log
+          path: build-gles/selftest.log
+          if-no-files-found: warn

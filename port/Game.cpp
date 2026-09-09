@@ -273,6 +273,9 @@ void boot_main_pc() {
     nuGfxDisplayOn();
 }
 
+extern "C" int port_shader_selftest_run(void); // port/ShaderSelfTest.cpp
+extern "C" int rom_offsets_selfcheck(int verbose); // port/rom_offsets.c
+
 #ifdef _WIN32
 int SDL_main(int argc, char** argv) {
 #else
@@ -325,6 +328,22 @@ int main(int argc, char* argv[]) {
 
     // Initialize the engine (creates Ship::Context, window, resource manager)
     GameEngine::Create(argc, argv);
+
+    // PAPERSHIP_SELFTEST=1: instead of booting the game, verify the ROM offset table
+    // and compile every shader variant the game can request (port/ShaderSelfTest.cpp).
+    // Exit code 1 if anything failed; no ROM is needed.
+    if (const char* selftest = getenv("PAPERSHIP_SELFTEST")) {
+        if (selftest[0] != '\0' && selftest[0] != '0') {
+            int failures = rom_offsets_selfcheck(1);
+            failures += port_shader_selftest_run();
+            fprintf(stderr, "[selftest] %s (%d failure(s))\n", failures == 0 ? "PASSED" : "FAILED", failures);
+            GameEngine::Instance->Destroy();
+            return failures == 0 ? 0 : 1;
+        }
+    }
+
+    // One summary line per boot: with a healthy build it reports 0 wrong resolutions.
+    rom_offsets_selfcheck(0);
 
     // Run Paper Mario's boot sequence (without the infinite loop)
     boot_main_pc();

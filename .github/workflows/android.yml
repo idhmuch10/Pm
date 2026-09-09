@@ -61,7 +61,8 @@ jobs:
             clang ninja-build cmake pkg-config xvfb mesa-utils \
             libsdl2-dev libgles-dev libegl-dev libgl1-mesa-dev libgl1-mesa-dri libglew-dev libglvnd-dev \
             libspdlog-dev libfmt-dev libtinyxml2-dev libzip-dev nlohmann-json3-dev libpng-dev \
-            libtcc-dev catch2 libpulse-dev libasound2-dev libdbus-1-dev libudev-dev
+            libtcc-dev catch2 libpulse-dev libasound2-dev libdbus-1-dev libudev-dev \
+            zipcmp zipmerge ziptool
 
       - name: Configure (OpenGL ES 3 like Android)
         run: >

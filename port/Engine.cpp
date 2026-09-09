@@ -349,8 +349,15 @@ uint32_t GameEngine::GetInterpolationFPS() {
 
 // Audio
 
+#ifdef __ANDROID__
+extern "C" void port_android_setup_thread_crash_stack(void);
+#endif
+
 void GameEngine::HandleAudioThread() {
     static Acmd audioCmdBuf[0x1000];
+#ifdef __ANDROID__
+    port_android_setup_thread_crash_stack();
+#endif
 
     int diag_frame = 0;
     int diag_underruns = 0;

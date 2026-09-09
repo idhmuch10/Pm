@@ -10,8 +10,17 @@
 extern "C" {
 #endif
 
-/** Redirect stdout/stderr to logcat. Call once, first thing in main(). */
+/** Redirect stdout/stderr to logcat and to <data dir>/papership_log.txt. Call once, first thing in main(). */
 void port_android_init(void);
+
+/** Install the crash handler (alternate signal stack + report file) for the calling thread. */
+void port_android_install_crash_handler(void);
+
+/** Give the calling thread an alternate signal stack so the crash handler can run on stack overflow. */
+void port_android_setup_thread_crash_stack(void);
+
+/** Append the clean-shutdown marker to the session log (MainActivity checks it on the next launch). */
+void port_android_mark_clean_shutdown(void);
 
 /** Block until MainActivity has copied the data files and imported a ROM. */
 void port_android_wait_for_setup(void);

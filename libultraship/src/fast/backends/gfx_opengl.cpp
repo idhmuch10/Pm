@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <cstring>
+#include <vector>
+#include <algorithm>
 
 #include <map>
 #include <unordered_map>
@@ -378,6 +380,44 @@ static std::string BuildVsShader(const CCFeatures& cc_features) {
     return result;
 }
 
+// Diagnostics for shader failures. PaperShip is tested with Metal; the GLSL path
+// (desktop OpenGL and, on Android, GLSL ES) had never been exercised, and a compile
+// failure used to abort() without printing the source.
+static void gfx_opengl_log_shader_failure(const char* stage, GLuint shader, const char* source, size_t length,
+                                          uint64_t shader_id0, uint32_t shader_id1) {
+    GLint logLength = 0;
+    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+    std::vector<char> infoLog((size_t)std::max(logLength, 1) + 1, '\0');
+    if (logLength > 0) {
+        glGetShaderInfoLog(shader, logLength, nullptr, infoLog.data());
+    }
+    fprintf(stderr, "[GfxOGL] %s shader compilation FAILED for shader id0=%016llx id1=%08x\n%s\n", stage,
+            (unsigned long long)shader_id0, shader_id1, infoLog.data());
+    fprintf(stderr, "[GfxOGL] ---- %s shader source ----\n", stage);
+    int line = 1;
+    const char* p = source;
+    const char* end = source + length;
+    while (p < end) {
+        const char* nl = static_cast<const char*>(memchr(p, '\n', end - p));
+        size_t len = nl ? (size_t)(nl - p) : (size_t)(end - p);
+        fprintf(stderr, "%4d: %.*s\n", line++, (int)len, p);
+        p += len + 1;
+    }
+    fprintf(stderr, "[GfxOGL] ---- end of %s shader source ----\n", stage);
+}
+
+// Fragment shader that draws nothing, used when the generated one does not compile
+// so the game keeps running (the affected effect is simply missing).
+static std::string gfx_opengl_fallback_fs_source() {
+#if defined(__APPLE__)
+    return "#version 410 core\nout vec4 vOutColor;\nvoid main() { vOutColor = vec4(0.0); discard; }\n";
+#elif defined(USE_OPENGLES)
+    return "#version 300 es\nprecision highp float;\nout vec4 vOutColor;\nvoid main() { vOutColor = vec4(0.0); discard; }\n";
+#else
+    return "#version 130\nvoid main() { gl_FragColor = vec4(0.0); discard; }\n";
+#endif
+}
+
 ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, uint32_t shader_id1) {
     CCFeatures cc_features;
     gfx_cc_get_features(shader_id0, shader_id1, &cc_features);
@@ -387,17 +427,18 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     const GLint lengths[2] = { (GLint)vs_buf.size(), (GLint)fs_buf.size() };
     GLint success;
 
+    // One line per new variant: the source can be regenerated offline from these ids.
+    fprintf(stderr, "[GfxOGL] new shader id0=%016llx id1=%08x (2cyc=%d alpha=%d fog=%d noise=%d edge=%d thr=%d tex0=%d tex1=%d)\n",
+            (unsigned long long)shader_id0, shader_id1, cc_features.opt_2cyc, cc_features.opt_alpha,
+            cc_features.opt_fog, cc_features.opt_noise, cc_features.opt_texture_edge, cc_features.opt_alpha_threshold,
+            cc_features.usedTextures[0], cc_features.usedTextures[1]);
+
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, &sources[0], &lengths[0]);
     glCompileShader(vertex_shader);
     glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        GLint max_length = 0;
-        glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &max_length);
-        char error_log[1024];
-        // fprintf(stderr, "Vertex shader compilation failed\n");
-        glGetShaderInfoLog(vertex_shader, max_length, &max_length, &error_log[0]);
-        // fprintf(stderr, "%s\n", &error_log[0]);
+        gfx_opengl_log_shader_failure("vertex", vertex_shader, vs_buf.data(), vs_buf.size(), shader_id0, shader_id1);
         abort();
     }
 
@@ -406,19 +447,46 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     glCompileShader(fragment_shader);
     glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        GLint max_length = 0;
-        glGetShaderiv(fragment_shader, GL_INFO_LOG_LENGTH, &max_length);
-        char error_log[1024];
-        fprintf(stderr, "Fragment shader compilation failed\n");
-        glGetShaderInfoLog(fragment_shader, max_length, &max_length, &error_log[0]);
-        fprintf(stderr, "%s\n", &error_log[0]);
-        abort();
+        gfx_opengl_log_shader_failure("fragment", fragment_shader, fs_buf.data(), fs_buf.size(), shader_id0,
+                                      shader_id1);
+        fprintf(stderr, "[GfxOGL] using an empty fallback fragment shader for id0=%016llx id1=%08x\n",
+                (unsigned long long)shader_id0, shader_id1);
+        const std::string fallback = gfx_opengl_fallback_fs_source();
+        const GLchar* fallbackSource = fallback.data();
+        const GLint fallbackLength = (GLint)fallback.size();
+        glDeleteShader(fragment_shader);
+        fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(fragment_shader, 1, &fallbackSource, &fallbackLength);
+        glCompileShader(fragment_shader);
+        glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            gfx_opengl_log_shader_failure("fallback fragment", fragment_shader, fallback.data(), fallback.size(),
+                                          shader_id0, shader_id1);
+            abort();
+        }
     }
 
     GLuint shader_program = glCreateProgram();
     glAttachShader(shader_program, vertex_shader);
     glAttachShader(shader_program, fragment_shader);
     glLinkProgram(shader_program);
+    glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
+    if (!success) {
+        // Never checked before: a failed link makes glUseProgram a no-op and the
+        // affected draws silently disappear.
+        GLint logLength = 0;
+        glGetProgramiv(shader_program, GL_INFO_LOG_LENGTH, &logLength);
+        std::vector<char> infoLog((size_t)std::max(logLength, 1) + 1, '\0');
+        if (logLength > 0) {
+            glGetProgramInfoLog(shader_program, logLength, nullptr, infoLog.data());
+        }
+        fprintf(stderr, "[GfxOGL] shader program LINK FAILED for id0=%016llx id1=%08x\n%s\n",
+                (unsigned long long)shader_id0, shader_id1, infoLog.data());
+        gfx_opengl_log_shader_failure("vertex (link failure)", vertex_shader, vs_buf.data(), vs_buf.size(),
+                                      shader_id0, shader_id1);
+        gfx_opengl_log_shader_failure("fragment (link failure)", fragment_shader, fs_buf.data(), fs_buf.size(),
+                                      shader_id0, shader_id1);
+    }
 
     size_t cnt = 0;
 

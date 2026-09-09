@@ -134,6 +134,34 @@ saves. Reported problems and what was done:
   `papership_crash.log`, hands the signal to the system tombstone, and the app
   offers to share the report on the next launch.
 
+### Second device report and the tooling added for it
+
+The aspect fix worked; damage numbers were still missing, the crash was pinned
+to the moment Bowser powers up with the Star Rod, no crash report appeared, and
+a black band stayed along one screen edge. Changes:
+
+* **Crash reporting that cannot fail silently.** The previous handler resolved
+  the log path through a JNI call from inside the signal handler. Now the data
+  directory is passed in at startup (`nativeSetDataDir`), the handler runs on an
+  alternate signal stack, writes with `open/write` only, and covers SIGABRT (the
+  renderer's `abort()` calls), SIGILL, SIGFPE and SIGTRAP. Every session is also
+  logged continuously to `papership_log.txt`, so even a hard kill leaves a log.
+  On the next launch the app offers **Copy / Save to Downloads / Share** for the
+  report; the Downloads copy is visible in the Files app.
+* **Shader failures no longer abort.** libultraship called `abort()` when a
+  fragment shader failed to compile and never checked link status. Both are now
+  logged together with the full generated GLSL, a compile failure falls back to
+  an empty fragment shader (the effect goes missing instead of the game dying),
+  and each new shader variant logs its ids. A crash when a new effect first
+  appears is the classic signature of a GLSL ES compile failure on Adreno, so
+  the next log should show either the failing shader or a real backtrace.
+* **Full-panel display.** The activity now draws under the display cutout
+  (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`) and hides the system bars through
+  `WindowInsetsController`, removing the black band.
+* **Testing tab** in the settings menu (`port/testing_bridge.c`): quick save /
+  quick load anywhere, warp by area/map/entry, story-progress editor, and a
+  preset that jumps straight to the intro Bowser confrontation.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

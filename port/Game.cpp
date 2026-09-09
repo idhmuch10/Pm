@@ -288,6 +288,11 @@ int main(int argc, char* argv[]) {
     port_android_wait_for_setup();
 #endif
 
+#ifdef __ANDROID__
+    // Android: alternate-stack handler that writes papership_crash.log without touching
+    // Java, then hands the signal to the system tombstone (port/android/AndroidPort.cpp).
+    port_android_install_crash_handler();
+#else
     // Install crash handler for debugging with backtrace
     auto crashHandler = [](int sig) {
         const char* sigName = (sig == SIGSEGV) ? "SIGSEGV" : (sig == SIGBUS) ? "SIGBUS" : "SIGABRT";
@@ -298,9 +303,6 @@ int main(int argc, char* argv[]) {
         char crashPath[1024];
         port_get_data_path("papership_crash.log", crashPath, sizeof(crashPath));
         FILE* crashFile = fopen(crashPath, "w");
-#ifdef __ANDROID__
-        __android_log_print(ANDROID_LOG_ERROR, "PaperShip", "[CRASH] %s received", sigName);
-#endif
 #ifdef __APPLE__
         void* callstack[64];
         int frames = backtrace(callstack, 64);
@@ -312,29 +314,14 @@ int main(int argc, char* argv[]) {
         }
         free(symbols);
 #endif
-#ifdef __ANDROID__
-        if (crashFile) {
-            fprintf(crashFile, "PaperShip Mobile crash: %s\nBuild: %s (%s %s)\n\n", sigName, gBuildVersion,
-                    gGitBranch, gGitCommitHash);
-            port_android_write_backtrace(crashFile);
-            port_android_dump_recent_log(crashFile);
-        } else {
-            port_android_write_backtrace(nullptr);
-        }
-#endif
         if (crashFile) { fclose(crashFile); }
         fflush(stderr);
-#ifdef __ANDROID__
-        // Hand the signal back to the system so debuggerd writes a full tombstone
-        // (visible with `adb logcat -s DEBUG`), then die.
-        signal(sig, SIG_DFL);
-        raise(sig);
-#endif
         _exit(1);
     };
     signal(SIGSEGV, crashHandler);
     signal(SIGBUS, crashHandler);
     signal(SIGABRT, crashHandler);
+#endif
 
     // Initialize the engine (creates Ship::Context, window, resource manager)
     GameEngine::Create(argc, argv);
@@ -365,5 +352,8 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "[main] exited after %d frames\n", loopCount);
 
     GameEngine::Instance->Destroy();
+#ifdef __ANDROID__
+    port_android_mark_clean_shutdown();
+#endif
     return 0;
 }

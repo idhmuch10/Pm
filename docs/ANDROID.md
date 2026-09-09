@@ -92,15 +92,39 @@ adb push "Paper Mario (USA).z64" "/sdcard/Android/data/com.papership.mobile/file
   to the menu.
 * Gamepads use SDL's game controller mappings (`gamecontrollerdb.txt`).
 
+## Testing shortcuts
+
+The settings menu (MENU pill or back button) has a **Testing** tab:
+
+* **Quick save / Quick load**: writes the active save slot with the current
+  position anywhere in a map (not only at save blocks) and re-enters the world
+  from it, the same way the file menu does. Use it right before a scene you want
+  to retry.
+* **Presets**: *Intro: Bowser confrontation* sets the story progress back to the
+  intro and warps to the castle room where the fight starts; *Goomba Village*
+  warps to `kmr_02`.
+* **Warp**: any area/map/entry from the game's map table, plus a story-progress
+  editor. Maps depend on flags set by earlier scenes, so an arbitrary warp can
+  show an inconsistent state; it is a test tool, not a cheat menu.
+
+A real "save state" (full memory snapshot) is not feasible in a decomp port: the
+game state is spread over static memory, malloc'd buffers and the renderer.
+
 ## Debugging and reporting crashes
 
 * All `fprintf(stderr, ...)`/`SPDLOG` output from the port goes to logcat under the
   tag `PaperShip`.
+* Every session's log is written continuously to `papership_log.txt` in the data
+  directory (previous run: `papership_log_prev.txt`); it contains one line per
+  compiled shader variant and the full source of any shader the GPU rejects.
 * A crash writes `papership_crash.log` (signal, native backtrace with function
-  names, the last 250 log lines) into the data directory, then hands the signal
-  back to Android so a full tombstone appears in `adb logcat -s DEBUG`. On the
-  next launch the app offers to **share the crash report** (any app that accepts
-  text: email, notes, a chat); paste it into a bug report.
+  names, the last 250 log lines) from an alternate signal stack without calling
+  into Java, then hands the signal back to Android so a full tombstone appears in
+  `adb logcat -s DEBUG`.
+* On the next launch the app detects an unclean exit and offers the report with
+  three buttons: **Copy** (clipboard, paste it into a bug report), **Save to
+  Downloads** (`Download/papership_report_<date>.txt`, visible in the Files app)
+  and **Share**.
 * Without a phone connected: the crash report is enough to locate the crash.
   With `adb`: `adb logcat -s PaperShip DEBUG` shows the game log and the
   tombstone; symbolise with `ndk-stack -sym <dir containing the unstripped

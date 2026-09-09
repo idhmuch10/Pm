@@ -11,6 +11,9 @@
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
+#include <climits>
+#include <cstring>
+#include "testing_bridge.h"
 
 // CVar names
 #define PS_CVAR_INTERNAL_RES       CVAR_SETTING("InternalResolution")
@@ -89,6 +92,117 @@ static void ToggleFullscreen43() {
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Testing tab: shortcuts to reach a scene again quickly. A true memory snapshot
+// is not possible in a decomp port, so this uses the game's own save file
+// (any position, not only save blocks) and the script API's map change
+// (port/testing_bridge.c).
+// ---------------------------------------------------------------------------
+static char sTestingStatus[160] = "";
+static int sWarpArea = -1;
+static int sWarpMap = 0;
+static int sWarpEntry = 0;
+static int sStoryEdit = 0;
+static bool sStoryEditInit = false;
+
+static void DrawTestingTab() {
+    ImGui::Spacing();
+    ImGui::TextWrapped("Shortcuts for testing. Quick save stores the current position in the active save "
+                       "slot (works anywhere, not only at save blocks); quick load re-enters the world from it. "
+                       "Warp changes map like a door transition.");
+    ImGui::Spacing();
+
+    const bool inWorld = port_testing_in_world() != 0;
+    if (inWorld) {
+        ImGui::Text("Now: %s entry %d, story progress %d, slot %d", port_testing_current_map(),
+                    port_testing_current_entry(), port_testing_story_progress(), port_testing_current_slot());
+    } else {
+        ImGui::Text("Not in the world right now (mode %d).", port_testing_game_mode());
+    }
+    ImGui::Spacing();
+
+    ImGui::BeginDisabled(!inWorld);
+    if (ImGui::Button("Quick save", ImVec2(-1, 0))) {
+        port_testing_quick_save(sTestingStatus, sizeof(sTestingStatus));
+    }
+    if (ImGui::Button("Quick load", ImVec2(-1, 0))) {
+        port_testing_quick_load(sTestingStatus, sizeof(sTestingStatus));
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    ImGui::Text("Presets");
+    ImGui::BeginDisabled(!inWorld);
+    if (ImGui::Button("Intro: Bowser confrontation (kkj_13)", ImVec2(-1, 0))) {
+        port_testing_warp_by_name("kkj_13", 0, port_testing_story_intro(), sTestingStatus, sizeof(sTestingStatus));
+    }
+    if (ImGui::Button("Goomba Village (kmr_02)", ImVec2(-1, 0))) {
+        port_testing_warp_by_name("kmr_02", 0, INT_MIN, sTestingStatus, sizeof(sTestingStatus));
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    ImGui::Text("Warp");
+    const int areaCount = port_testing_area_count();
+    if (sWarpArea < 0) {
+        sWarpArea = inWorld ? port_testing_current_area() : 0;
+        sWarpMap = inWorld ? port_testing_current_map_index() : 0;
+    }
+    if (sWarpArea < 0 || sWarpArea >= areaCount) {
+        sWarpArea = 0;
+    }
+    if (ImGui::BeginCombo("Area", port_testing_area_id(sWarpArea))) {
+        for (int a = 0; a < areaCount; a++) {
+            if (ImGui::Selectable(port_testing_area_id(a), a == sWarpArea)) {
+                sWarpArea = a;
+                sWarpMap = 0;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    const int mapCount = port_testing_map_count(sWarpArea);
+    if (sWarpMap < 0 || sWarpMap >= mapCount) {
+        sWarpMap = 0;
+    }
+    if (ImGui::BeginCombo("Map", port_testing_map_id(sWarpArea, sWarpMap))) {
+        for (int m = 0; m < mapCount; m++) {
+            if (ImGui::Selectable(port_testing_map_id(sWarpArea, m), m == sWarpMap)) {
+                sWarpMap = m;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::InputInt("Entry", &sWarpEntry);
+    if (sWarpEntry < 0) {
+        sWarpEntry = 0;
+    }
+    ImGui::BeginDisabled(!inWorld);
+    if (ImGui::Button("Warp", ImVec2(-1, 0))) {
+        port_testing_warp(sWarpArea, sWarpMap, sWarpEntry, sTestingStatus, sizeof(sTestingStatus));
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    ImGui::Text("Story progress (GB_StoryProgress)");
+    if (!sStoryEditInit && inWorld) {
+        sStoryEdit = port_testing_story_progress();
+        sStoryEditInit = true;
+    }
+    ImGui::InputInt("Value", &sStoryEdit);
+    ImGui::BeginDisabled(!inWorld);
+    if (ImGui::Button("Apply story progress", ImVec2(-1, 0))) {
+        port_testing_set_story_progress(sStoryEdit);
+        snprintf(sTestingStatus, sizeof(sTestingStatus), "Story progress set to %d (takes effect on the next map load).",
+                 sStoryEdit);
+    }
+    ImGui::EndDisabled();
+
+    if (sTestingStatus[0] != '\0') {
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", sTestingStatus);
+    }
+}
 
 void PaperShipMenu::DrawElement() {
     auto window = Ship::Context::GetInstance()->GetWindow();
@@ -203,6 +317,12 @@ void PaperShipMenu::DrawElement() {
                 CVarSave();
             }
 
+            ImGui::EndTabItem();
+        }
+
+        // --- Testing Tab (PaperShip Mobile) ---
+        if (ImGui::BeginTabItem("Testing")) {
+            DrawTestingTab();
             ImGui::EndTabItem();
         }
 

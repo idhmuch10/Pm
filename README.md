@@ -13,10 +13,11 @@ picker.
 
 > **Status:** early but playable. On a Galaxy Z Fold 7 the game boots, plays
 > through the intro and the first Bowser fight with touch controls, and saves.
-> Known problems under investigation: the opening logos render with broken
-> textures, battle damage numbers are not visible, and a crash was reported
-> after losing the intro Bowser fight. If the game crashes, the next launch
-> offers to share a crash report — please send it.
+> Known problems under investigation: battle damage numbers are not visible and
+> the game crashed when Bowser powers up with the Star Rod. The build now logs
+> every session and, after a crash, offers the report on the next launch
+> (Copy / Save to Downloads / Share) — please send it. The settings menu has a
+> Testing tab with quick save/load and a warp straight to that fight.
 
 ## Legal notice
 

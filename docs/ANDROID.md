@@ -118,12 +118,29 @@ do not crash the game:
   Open the menu right after the problem happened (during a cutscene is fine)
   and save or share the report. The report also carries the live status block
   and, in the world, a dump of the colliders around Mario (names, flags,
-  bounding boxes, first triangles) plus wall probes in eight directions.
+  bounding boxes, triangles), the entities and bound triggers, wall probes in
+  eight directions and the result of the game's own movement test
+  (`player_test_move_with_slipping`) in eight directions.
 * **Live status** shows the player position, action state and flags, the
   collision ids the game currently sees (floor, wall, inspect target, pushing),
   the collider count of the map and the partner's position/floor. When Mario
   walks through a door, open the menu while pushing against it: `wall` should
   name the door's collider; `-1` means the wall test did not hit it at all.
+
+Two collision checks also run on their own and only need the log:
+
+* every map load ends with a `[collision] self-check:` line — each wall and
+  floor triangle of the map is ray-tested against itself with the game's own
+  `test_ray_colliders`, so `walls N hit / 0 other / N total` means the ray test
+  works on this device for this map's data, and a `MISS` line names a
+  triangle it does not;
+* whenever Mario's movement in one frame passes through a solid wall triangle
+  the port logs `[collision] PLAYER CROSSED WALL #id (name)` with the move,
+  the player state and yaw values, and then repeats the wall ray from the
+  previous position at the three heights the game uses, the entity ray and
+  the movement test. Walk into a door and save a report: those lines say
+  whether the ray test misses the door (data or code) or hits it while the
+  game ignored the result (flow, e.g. an entity or a script state).
 
 ## Debugging and reporting crashes
 
@@ -174,6 +191,16 @@ cd build-gles && PAPERSHIP_SELFTEST=1 SDL_AUDIODRIVER=dummy \
 
 The same run is part of CI (`selftest-linux` job). Every normal boot also
 prints one `[rom_offsets]` summary line to the session log.
+
+`tools/port/collision_harness/run.sh` is a second ROM-free check aimed at the
+door/wall bug: it builds a synthetic hit file, loads it through the real
+`load_hit_data`, and runs the real ray tests, trig helpers, the port's collision
+diagnostics and a copy of the player movement code, comparing the output with
+`expected.txt`. `run.sh --host` uses the host compiler; `run.sh --android`
+builds the same sources with the NDK as a static aarch64 Bionic executable and
+runs it under `qemu-aarch64` (`apt-get install qemu-user`), which is how the
+collision code was shown to behave identically on ARM64 and x86-64. CI runs
+both (the `build` job the Android one, `selftest` the host one).
 
 ## Troubleshooting
 

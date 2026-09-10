@@ -33,6 +33,12 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --console=plain
 
+      - name: Collision harness on aarch64 (NDK clang, static Bionic, qemu-user)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-user
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018" tools/port/collision_harness/run.sh --android
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -63,6 +69,9 @@ jobs:
             libspdlog-dev libfmt-dev libtinyxml2-dev libzip-dev nlohmann-json3-dev libpng-dev \
             libtcc-dev catch2 libpulse-dev libasound2-dev libdbus-1-dev libudev-dev \
             zipcmp zipmerge ziptool
+
+      - name: Collision harness on the host
+        run: CC=clang tools/port/collision_harness/run.sh --host
 
       - name: Configure (OpenGL ES 3 like Android)
         run: >

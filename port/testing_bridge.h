@@ -40,8 +40,16 @@ int port_testing_story_intro(void);
 /* Multi-line live status: player position/state, collision ids, partner NPC, sprite. */
 void port_testing_status_text(char* buf, size_t size);
 
-/* Log the colliders near the player and eight horizontal wall probes (part of the report). */
+/* Log the colliders near the player, the entities and triggers, and wall/movement probes
+ * in eight directions (part of the report). */
 void port_testing_dump_collision(void);
+
+/* Ray-test every wall and floor triangle of the loaded map against itself (map load). */
+void port_testing_collision_selfcheck(void);
+
+/* Per-frame watchdog: logs when the player's movement passed through a solid wall and
+ * repeats the game's wall ray from the previous position. */
+void port_testing_watch_player_walls(float prevX, float prevY, float prevZ);
 
 /* Offer the current session log as a report (Android: the Copy / Save / Share dialog).
  * Returns non-zero when a dialog was requested; msg receives a status line either way. */

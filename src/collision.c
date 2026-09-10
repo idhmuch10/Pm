@@ -2,6 +2,7 @@
 #include "model.h"
 #ifdef PORT
 #include "port/port_endian.h"
+#include "port/testing_bridge.h"
 #include <stdio.h>
 #endif
 
@@ -365,6 +366,7 @@ void load_hit_data(s32 idx, HitFile* hit) {
                         c->aabb->min.y, c->aabb->min.z, c->aabb->max.x, c->aabb->max.y, c->aabb->max.z);
             }
         }
+        port_testing_collision_selfcheck();
     }
 #endif
 }

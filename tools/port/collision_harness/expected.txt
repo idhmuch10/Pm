@@ -1,0 +1,120 @@
+sizeof: Collider=48 ColliderTriangle=80 ColliderBoundingBox=28 Vec3f=12 HitID=4 char signed=1
+[collision] loaded colliders: 4 colliders, 16 vertices, 28 aabb words
+[collision]  #0 flags=00000000 tris=2 child=-1 sibling=1 aabb=(-501 -1 -501)-(501 1 501)
+[collision]  #1 flags=00000000 tris=2 child=-1 sibling=2 aabb=(-274 -1 -60)-(-272 101 4)
+[collision]  #2 flags=00000000 tris=2 child=-1 sibling=3 aabb=(58 -1 -166)-(117 89 -131)
+[collision]  #3 flags=00000000 tris=2 child=-1 sibling=-1 aabb=(304 -1 180)-(306 101 302)
+[collision] self-check: walls 6 hit / 0 other / 6 total, floors 2 hit / 0 other / 2 total, degenerate 0
+loaded 4 colliders
+  #0 floor flags=00000000 tris=2 aabb=(-501.0 -1.0 -501.0)-(501.0 1.0 501.0)
+     tri0 v1=(0 0 0) v2=(207 0 500) v3=(500 0 207) n=(-0.0000 1.0000 0.0000) oneSided=1
+     tri1 v1=(0 0 0) v2=(-500 0 -500) v3=(207 0 500) n=(0.0000 1.0000 0.0000) oneSided=1
+  #1 gate flags=00000000 tris=2 aabb=(-274.0 -1.0 -60.0)-(-272.0 101.0 4.0)
+     tri0 v1=(-273 0 -59) v2=(-273 100 -59) v3=(-273 100 3) n=(1.0000 0.0000 -0.0000) oneSided=1
+     tri1 v1=(-273 0 -59) v2=(-273 100 3) v3=(-273 0 3) n=(1.0000 0.0000 -0.0000) oneSided=1
+  #2 door flags=00000000 tris=2 aabb=(58.0 -1.0 -166.0)-(117.0 89.0 -131.0)
+     tri0 v1=(59 0 -165) v2=(116 88 -132) v3=(59 88 -165) n=(-0.5010 0.0000 0.8654) oneSided=1
+     tri1 v1=(59 0 -165) v2=(116 0 -132) v3=(116 88 -132) n=(-0.5010 0.0000 0.8654) oneSided=1
+  #3 twosided flags=00000000 tris=2 aabb=(304.0 -1.0 180.0)-(306.0 101.0 302.0)
+     tri0 v1=(305 0 181) v2=(305 100 181) v3=(305 100 301) n=(1.0000 0.0000 -0.0000) oneSided=0
+     tri1 v1=(305 0 181) v2=(305 100 301) v3=(305 0 301) n=(1.0000 0.0000 -0.0000) oneSided=0
+trig:
+  yaw   0.0: wrap=0 sin=0.000000 cos=1.000000 atan2(0,0,sin,-cos)=0.0000
+  yaw  45.0: wrap=8191 sin=0.707022 cos=0.707144 atan2(0,0,sin,-cos)=44.9922
+  yaw  90.0: wrap=16383 sin=1.000000 cos=0.000092 atan2(0,0,sin,-cos)=89.9959
+  yaw 135.0: wrap=24575 sin=0.707144 cos=-0.707022 atan2(0,0,sin,-cos)=134.9922
+  yaw 180.0: wrap=32767 sin=0.000092 cos=-1.000000 atan2(0,0,sin,-cos)=179.9959
+  yaw 225.0: wrap=40959 sin=-0.707022 cos=-0.707144 atan2(0,0,sin,-cos)=224.9922
+  yaw 270.0: wrap=49151 sin=-1.000000 cos=-0.000092 atan2(0,0,sin,-cos)=269.9959
+  yaw 315.0: wrap=57343 sin=-0.707144 cos=0.707022 atan2(0,0,sin,-cos)=314.9922
+  yaw -90: sin=-1.000000 cos=0.000092
+  pm_round(2.5)=3 pm_round(-2.5)=-3 pm_round(0.4)=0
+rays:
+  down onto floor from (100,50,100)  hit #0 (floor) depth=50.0000 at (100.000 0.000 100.000) n=(-0.0000 1.0000 0.0000)
+  west into gate from (-250,10,-28)  hit #1 (gate) depth=23.0000 at (-273.000 10.010 -28.000) n=(1.0000 0.0000 -0.0000)
+  west into gate, short ray (13)     miss (ret -1)
+  west into gate, from 12 away       hit #1 (gate) depth=12.0000 at (-273.000 10.010 -28.000) n=(1.0000 0.0000 -0.0000)
+  east from behind the gate          miss (ret -1)
+  diag ray into gate (general)       hit #1 (gate) depth=25.5556 at (-273.000 12.566 -25.444) n=(1.0000 0.0000 -0.0000)
+  into door wall from (60,10,-120)   hit #2 (door) depth=38.4440 at (79.222 10.010 -153.293) n=(-0.5010 0.0000 0.8654)
+  into two-sided from west           hit #3 (twosided) depth=15.0000 at (305.000 10.010 240.000) n=(1.0000 0.0000 -0.0000)
+  into two-sided from east           hit #3 (twosided) depth=15.0000 at (305.000 10.010 240.000) n=(1.0000 0.0000 -0.0000)
+  gate with sin/cos of yaw 270       hit #1 (gate) depth=23.0000 at (-273.000 10.010 -28.000) n=(1.0000 0.0000 -0.0000)
+  gate with real trig yaw 270        hit #1 (gate) depth=23.0000 at (-273.000 10.010 -27.998) n=(1.0000 0.0000 -0.0000)
+self-check:
+[collision] self-check: walls 6 hit / 0 other / 6 total, floors 2 hit / 0 other / 2 total, degenerate 0
+watchdog: move through the gate
+[collision] PLAYER CROSSED WALL #1 (?) tri1 flags=00000000 oneSided=1 n=(1.00 0.00 -0.00) at (-273.0 10.0 -28.0)
+    move (-250.00 0.00 -28.00) -> (-280.00 0.00 -28.00) len 30.00, speed 0.00 state 0 flags 00000000 animFlags 00000000
+    yaw target 0.0 cur 0.0 heading 0.0 facing 0.0 cam 0.0; curWall 0 pushing 0 floor 0; overlaps nesting 0 timeInAir 0 pushVel (0.00 0.00 0.00)
+    re-test from old pos, +10.01, len+13: hit #1 (?) at depth 23.00 of 43.00, point (-273.0 10.0 -28.0) n=(1.00 0.00 -0.00)
+    re-test from old pos, +10.01, len 40: hit #1 (?) at depth 23.00 of 40.00, point (-273.0 10.0 -28.0) n=(1.00 0.00 -0.00)
+    re-test from old pos, +0.1: hit #1 (?) at depth 23.00 of 43.00, point (-273.0 0.1 -28.0) n=(1.00 0.00 -0.00)
+    re-test from old pos, +0.75*height: hit #1 (?) at depth 23.00 of 43.00, point (-273.0 27.8 -28.0) n=(1.00 0.00 -0.00)
+    entity ray: -1, depth left 43.00
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+    player_test_move_with_slipping(len 30.00, yaw 270.0) from old pos: hit 1, new pos (-260.00 -28.00)
+watchdog: walk along the gate (no crossing expected)
+dump:
+[collision] dump around player (-255.0 0.0 -28.0): 4 colliders, ignore mask 00010000
+  yaw target 0.0 cur 0.0 heading 0.0 facing 0.0 cam 0.0; overlaps nesting 0 timeInAir 0
+  #0 ? flags=00000000 tris=2 aabb=(-501 -1 -501)-(501 1 501) dist=0.0
+     tri0 v1=(0 0 0) v2=(207 0 500) v3=(500 0 207) n=(-0.00 1.00 0.00) oneSided=1
+     tri1 v1=(0 0 0) v2=(-500 0 -500) v3=(207 0 500) n=(0.00 1.00 0.00) oneSided=1
+  #1 ? flags=00000000 tris=2 aabb=(-274 -1 -60)-(-272 101 4) dist=17.0
+     tri0 v1=(-273 0 -59) v2=(-273 100 -59) v3=(-273 100 3) n=(1.00 0.00 -0.00) oneSided=1
+     tri1 v1=(-273 0 -59) v2=(-273 100 3) v3=(-273 0 3) n=(1.00 0.00 -0.00) oneSided=1
+  entities:
+  triggers:
+  wall probes from the player (26 units, +10 up), yaw:hit@depth: 0:- 45:- 90:- 135:- 180:- 225:1(?)@25.5 270:1(?)@18.0 315:1(?)@25.5
+  movement probes (player_test_move_with_slipping, 2 units), yaw:hit: 0:- 45:- 90:- 135:- 180:- 225:- 270:- 315:-
+walk west into the gate (player radius 13, 2 units per step):
+  step  0: x=-232.0000 z=-27.9998 hit=-1
+  step  1: x=-234.0000 z=-27.9996 hit=-1
+  step  2: x=-236.0000 z=-27.9995 hit=-1
+  step  3: x=-238.0000 z=-27.9993 hit=-1
+  step  4: x=-240.0000 z=-27.9991 hit=-1
+  step  5: x=-242.0000 z=-27.9989 hit=-1
+  step  6: x=-244.0000 z=-27.9987 hit=-1
+  step  7: x=-246.0000 z=-27.9985 hit=-1
+  step  8: x=-248.0000 z=-27.9984 hit=-1
+  step  9: x=-250.0000 z=-27.9982 hit=-1
+  step 10: x=-252.0000 z=-27.9980 hit=-1
+  step 11: x=-254.0000 z=-27.9978 hit=-1
+  step 12: x=-256.0000 z=-27.9976 hit=-1
+  step 13: x=-258.0000 z=-27.9974 hit=-1
+  step 14: x=-260.0000 z=-27.9973 hit=-1
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+  step 15: x=-260.0000 z=-27.9972 hit=1
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+  step 16: x=-260.0000 z=-27.9971 hit=1
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+  step 17: x=-260.0000 z=-27.9970 hit=1
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+  step 18: x=-260.0000 z=-27.9969 hit=1
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+  step 19: x=-260.0000 z=-27.9968 hit=1
+inspect from x=-255 facing west (length = radius):
+    angle filter: nAngleZ=180.0000 nAngleX=90.0000
+  x=-260.0000 z=-27.9989 hit=1
+walk into the diagonal door wall (yaw 330):
+  step  0: x=58.9999 z=-111.7320 hit=-1
+  step  1: x=57.9998 z=-113.4640 hit=-1
+  step  2: x=56.9997 z=-115.1960 hit=-1
+  step  3: x=55.9996 z=-116.9279 hit=-1
+  step  4: x=54.9995 z=-118.6599 hit=-1
+  step  5: x=53.9995 z=-120.3919 hit=-1
+  step  6: x=52.9994 z=-122.1239 hit=-1
+  step  7: x=51.9993 z=-123.8559 hit=-1
+  step  8: x=50.9992 z=-125.5879 hit=-1
+  step  9: x=49.9991 z=-127.3199 hit=-1
+  step 10: x=48.9990 z=-129.0518 hit=-1
+  step 11: x=47.9989 z=-130.7838 hit=-1
+  step 12: x=46.9988 z=-132.5158 hit=-1
+  step 13: x=45.9987 z=-134.2478 hit=-1
+  step 14: x=44.9986 z=-135.9798 hit=-1
+  step 15: x=43.9985 z=-137.7117 hit=-1
+  step 16: x=42.9984 z=-139.4437 hit=-1
+  step 17: x=41.9984 z=-141.1757 hit=-1
+  step 18: x=40.9983 z=-142.9077 hit=-1
+  step 19: x=39.9982 z=-144.6397 hit=-1

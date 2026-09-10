@@ -6,6 +6,7 @@
 #include "sprite/player.h"
 #ifdef PORT
 #include <stdio.h>
+#include "port/testing_bridge.h"
 #endif
 
 #ifdef SHIFT
@@ -611,6 +612,9 @@ void update_player(void) {
     PlayerStatus* playerStatus = &gPlayerStatus;
     CollisionStatus* collisionStatus = &gCollisionStatus;
     GameStatus* gameStatus;
+#ifdef PORT
+    Vec3f portPrevPos;
+#endif
 
     update_partner_timers();
 
@@ -640,6 +644,9 @@ void update_player(void) {
     collisionStatus->lastWallHammered = NO_COLLIDER;
     collisionStatus->curInspect = NO_COLLIDER;
     collisionStatus->floorBelow = true;
+#ifdef PORT
+    portPrevPos = playerStatus->pos;
+#endif
 
     update_player_input();
     playerStatus->flags &= ~PS_FLAG_SPECIAL_LAND;
@@ -655,6 +662,9 @@ void update_player(void) {
     } else {
         phys_update_lava_reset();
     }
+#ifdef PORT
+    port_testing_watch_player_walls(portPrevPos.x, portPrevPos.y, portPrevPos.z);
+#endif
 
     if (playerStatus->flags & PS_FLAG_CUTSCENE_MOVEMENT) {
         playerStatus->moveFrames--;

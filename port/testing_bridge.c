@@ -9,6 +9,7 @@
 #include "model.h"
 
 extern ShapeFile gMapShapeData;
+extern TriggerList* gCurrentTriggerListPtr;
 #include "testing_bridge.h"
 #include "port_paths.h"
 #include <limits.h>
@@ -249,8 +250,208 @@ static const char* collider_name(int index) {
     return "?";
 }
 
-/* Log the colliders near the player (flags, bounding box, first triangles) and the
- * result of horizontal wall probes in eight directions, for collision bug reports. */
+static f32 unit_xz(f32* dx, f32* dz) {
+    f32 len = sqrtf(*dx * *dx + *dz * *dz);
+    if (len > 0.0f) {
+        *dx /= len;
+        *dz /= len;
+    }
+    return len;
+}
+
+/* Cast the game's own wall ray (test_ray_colliders, horizontal, ignoring
+ * COLLIDER_FLAG_IGNORE_PLAYER) and describe the outcome in one line. */
+static void log_wall_ray(const char* label, f32 sx, f32 sy, f32 sz, f32 dx, f32 dz, f32 depth) {
+    f32 hx, hy, hz, nx, ny, nz;
+    f32 d = depth;
+    s32 hit = test_ray_colliders(COLLIDER_FLAG_IGNORE_PLAYER, sx, sy, sz, dx, 0.0f, dz, &hx, &hy, &hz, &d, &nx, &ny,
+                                 &nz);
+    if (hit >= 0) {
+        fprintf(stderr, "    %s: hit #%d (%s) at depth %.2f of %.2f, point (%.1f %.1f %.1f) n=(%.2f %.2f %.2f)\n",
+                label, hit, collider_name(hit), d, depth, hx, hy, hz, nx, ny, nz);
+    } else {
+        fprintf(stderr, "    %s: no hit within %.2f (ret %d)\n", label, depth, hit);
+    }
+}
+
+/* Runs every wall and floor triangle of the freshly loaded map through the game's
+ * own ray tests: a short ray cast from just in front of each triangle's centre
+ * straight at it must hit that triangle's collider. Called from load_hit_data(). */
+void port_testing_collision_selfcheck(void) {
+    CollisionData* cd = &gCollisionData;
+    int walls = 0, wallHits = 0, wallOther = 0;
+    int floors = 0, floorHits = 0, floorOther = 0;
+    int degenerate = 0, printed = 0;
+    int i, t;
+
+    for (i = 0; i < cd->numColliders; i++) {
+        Collider* c = &cd->colliderList[i];
+        if (c->numTriangles == 0 || c->aabb == NULL || (c->flags & COLLIDER_FLAG_IGNORE_PLAYER)) {
+            continue;
+        }
+        for (t = 0; t < c->numTriangles; t++) {
+            ColliderTriangle* tri = &c->triangleTable[t];
+            f32 nx = tri->normal.x, ny = tri->normal.y, nz = tri->normal.z;
+            f32 cx = (tri->v1->x + tri->v2->x + tri->v3->x) / 3.0f;
+            f32 cy = (tri->v1->y + tri->v2->y + tri->v3->y) / 3.0f;
+            f32 cz = (tri->v1->z + tri->v2->z + tri->v3->z) / 3.0f;
+            f32 hx, hy, hz, hnx, hny, hnz;
+            f32 depth = 10.0f;
+            s32 hit;
+
+            if (nx == 0.0f && ny == 0.0f && nz == 0.0f) {
+                degenerate++;
+                continue;
+            }
+            if (fabsf(ny) < 0.5f) {
+                f32 dx = -nx, dz = -nz;
+                unit_xz(&dx, &dz);
+                walls++;
+                hit = test_ray_colliders(COLLIDER_FLAG_IGNORE_PLAYER, cx - dx * 5.0f, cy, cz - dz * 5.0f, dx, 0.0f, dz,
+                                         &hx, &hy, &hz, &depth, &hnx, &hny, &hnz);
+                if (hit == i) {
+                    wallHits++;
+                } else if (hit >= 0) {
+                    wallOther++;
+                } else if (printed < 8) {
+                    printed++;
+                    fprintf(stderr, "[collision] self-check MISS wall #%d (%s) tri%d centre (%.1f %.1f %.1f) n=(%.2f %.2f %.2f) oneSided=%d: ret %d\n",
+                            i, collider_name(i), t, cx, cy, cz, nx, ny, nz, tri->oneSided, hit);
+                }
+            } else if (ny > 0.5f) {
+                floors++;
+                hit = test_ray_colliders(COLLIDER_FLAG_IGNORE_PLAYER, cx, cy + 5.0f, cz, 0.0f, -1.0f, 0.0f, &hx, &hy,
+                                         &hz, &depth, &hnx, &hny, &hnz);
+                if (hit == i) {
+                    floorHits++;
+                } else if (hit >= 0) {
+                    floorOther++;
+                } else if (printed < 8) {
+                    printed++;
+                    fprintf(stderr, "[collision] self-check MISS floor #%d (%s) tri%d centre (%.1f %.1f %.1f) n=(%.2f %.2f %.2f) oneSided=%d: ret %d\n",
+                            i, collider_name(i), t, cx, cy, cz, nx, ny, nz, tri->oneSided, hit);
+                }
+            }
+        }
+    }
+    fprintf(stderr, "[collision] self-check: walls %d hit / %d other / %d total, floors %d hit / %d other / %d total, degenerate %d\n",
+            wallHits, wallOther, walls, floorHits, floorOther, floors, degenerate);
+}
+
+/* Called once per player update with the position the frame started from. If the
+ * player's movement this frame passed through a solid wall triangle, log the event
+ * and repeat the game's wall ray from the old position so the report shows what the
+ * collision test returns for exactly this move. */
+void port_testing_watch_player_walls(f32 prevX, f32 prevY, f32 prevZ) {
+    static int sCooldown = 0;
+    static int sLogged = 0;
+    PlayerStatus* ps = &gPlayerStatus;
+    CollisionStatus* cs = &gCollisionStatus;
+    CollisionData* cd = &gCollisionData;
+    f32 x0 = prevX, y0 = prevY + 10.01f, z0 = prevZ;
+    f32 x1 = ps->pos.x, y1 = ps->pos.y + 10.01f, z1 = ps->pos.z;
+    f32 mx = x1 - x0, my = y1 - y0, mz = z1 - z0;
+    f32 moveLen = sqrtf(mx * mx + mz * mz);
+    f32 bbMinX, bbMaxX, bbMinY, bbMaxY, bbMinZ, bbMaxZ;
+    int i, t;
+
+    if (get_game_mode() != GAME_MODE_WORLD || sLogged >= 24) {
+        return;
+    }
+    if (sCooldown > 0) {
+        sCooldown--;
+        return;
+    }
+    // Scripts and map transitions move the player through walls legitimately.
+    if ((ps->flags & (PS_FLAG_NO_STATIC_COLLISION | PS_FLAG_CUTSCENE_MOVEMENT)) || moveLen < 0.01f || moveLen > 60.0f) {
+        return;
+    }
+    bbMinX = (x0 < x1 ? x0 : x1) - 1.0f; bbMaxX = (x0 > x1 ? x0 : x1) + 1.0f;
+    bbMinY = (y0 < y1 ? y0 : y1) - 1.0f; bbMaxY = (y0 > y1 ? y0 : y1) + 1.0f;
+    bbMinZ = (z0 < z1 ? z0 : z1) - 1.0f; bbMaxZ = (z0 > z1 ? z0 : z1) + 1.0f;
+
+    for (i = 0; i < cd->numColliders; i++) {
+        Collider* c = &cd->colliderList[i];
+        if (c->numTriangles == 0 || c->aabb == NULL || (c->flags & COLLIDER_FLAG_IGNORE_PLAYER)) {
+            continue;
+        }
+        if (bbMaxX < c->aabb->min.x || bbMinX > c->aabb->max.x || bbMaxZ < c->aabb->min.z ||
+            bbMinZ > c->aabb->max.z || bbMaxY < c->aabb->min.y || bbMinY > c->aabb->max.y) {
+            continue;
+        }
+        for (t = 0; t < c->numTriangles; t++) {
+            ColliderTriangle* tri = &c->triangleTable[t];
+            f32 nx = tri->normal.x, ny = tri->normal.y, nz = tri->normal.z;
+            f32 d0, d1, k, px, py, pz;
+            f32 ax, ay, az, bx, by, bz, cx, cy, cz;
+            f32 e0, e1, e2;
+            int crossed;
+
+            if (fabsf(ny) >= 0.5f || (nx == 0.0f && ny == 0.0f && nz == 0.0f)) {
+                continue;
+            }
+            d0 = nx * (x0 - tri->v1->x) + ny * (y0 - tri->v1->y) + nz * (z0 - tri->v1->z);
+            d1 = nx * (x1 - tri->v1->x) + ny * (y1 - tri->v1->y) + nz * (z1 - tri->v1->z);
+            crossed = (d0 >= 0.0f && d1 < 0.0f) || (!tri->oneSided && d0 <= 0.0f && d1 > 0.0f);
+            if (!crossed || d0 == d1) {
+                continue;
+            }
+            k = d0 / (d0 - d1);
+            px = x0 + mx * k; py = y0 + my * k; pz = z0 + mz * k;
+            // inside test: the loader's normal is (v2 - v1) x (v3 - v1), so v1, v2, v3 wind
+            // counter-clockwise around it
+            ax = tri->v2->x - tri->v1->x; ay = tri->v2->y - tri->v1->y; az = tri->v2->z - tri->v1->z;
+            bx = px - tri->v1->x; by = py - tri->v1->y; bz = pz - tri->v1->z;
+            e0 = (ay * bz - az * by) * nx + (az * bx - ax * bz) * ny + (ax * by - ay * bx) * nz;
+            ax = tri->v3->x - tri->v2->x; ay = tri->v3->y - tri->v2->y; az = tri->v3->z - tri->v2->z;
+            bx = px - tri->v2->x; by = py - tri->v2->y; bz = pz - tri->v2->z;
+            e1 = (ay * bz - az * by) * nx + (az * bx - ax * bz) * ny + (ax * by - ay * bx) * nz;
+            ax = tri->v1->x - tri->v3->x; ay = tri->v1->y - tri->v3->y; az = tri->v1->z - tri->v3->z;
+            bx = px - tri->v3->x; by = py - tri->v3->y; bz = pz - tri->v3->z;
+            e2 = (ay * bz - az * by) * nx + (az * bx - ax * bz) * ny + (ax * by - ay * bx) * nz;
+            if (e0 < -0.01f || e1 < -0.01f || e2 < -0.01f) {
+                continue;
+            }
+
+            cx = mx; cz = mz;
+            unit_xz(&cx, &cz);
+            sLogged++;
+            sCooldown = 30;
+            fprintf(stderr, "[collision] PLAYER CROSSED WALL #%d (%s) tri%d flags=%08X oneSided=%d n=(%.2f %.2f %.2f) at (%.1f %.1f %.1f)\n",
+                    i, collider_name(i), t, (unsigned)c->flags, tri->oneSided, nx, ny, nz, px, py, pz);
+            fprintf(stderr, "    move (%.2f %.2f %.2f) -> (%.2f %.2f %.2f) len %.2f, speed %.2f state %d flags %08X animFlags %08X\n",
+                    prevX, prevY, prevZ, ps->pos.x, ps->pos.y, ps->pos.z, moveLen, ps->curSpeed, ps->actionState,
+                    (unsigned)ps->flags, (unsigned)ps->animFlags);
+            fprintf(stderr, "    yaw target %.1f cur %.1f heading %.1f facing %.1f cam %.1f; curWall %d pushing %d floor %d; overlaps nesting %d timeInAir %d pushVel (%.2f %.2f %.2f)\n",
+                    ps->targetYaw, ps->curYaw, ps->heading, ps->spriteFacingAngle, gCameras[gCurrentCameraID].curYaw,
+                    cs->curWall, cs->pushingAgainstWall, cs->curFloor, ps->enableCollisionOverlapsCheck, ps->timeInAir,
+                    ps->pushVel.x, ps->pushVel.y, ps->pushVel.z);
+            log_wall_ray("re-test from old pos, +10.01, len+13", x0, y0, z0, cx, cz, moveLen + 13.0f);
+            log_wall_ray("re-test from old pos, +10.01, len 40", x0, y0, z0, cx, cz, 40.0f);
+            log_wall_ray("re-test from old pos, +0.1", x0, prevY + 0.1f, z0, cx, cz, moveLen + 13.0f);
+            log_wall_ray("re-test from old pos, +0.75*height", x0, prevY + ps->colliderHeight * 0.75f, z0, cx, cz,
+                         moveLen + 13.0f);
+            {
+                f32 hx, hy, hz, hnx, hny, hnz;
+                f32 depth = moveLen + 13.0f;
+                s32 ent = test_ray_entities(x0, y0, z0, cx, 0.0f, cz, &hx, &hy, &hz, &depth, &hnx, &hny, &hnz);
+                fprintf(stderr, "    entity ray: %d, depth left %.2f\n", ent, depth);
+            }
+            {
+                f32 x = prevX, y = prevY, z = prevZ;
+                f32 yaw = atan2(0.0f, 0.0f, mx, mz);
+                HitID hit = player_test_move_with_slipping(ps, &x, &y, &z, moveLen, yaw);
+                fprintf(stderr, "    player_test_move_with_slipping(len %.2f, yaw %.1f) from old pos: hit %d, new pos (%.2f %.2f)\n",
+                        moveLen, yaw, hit, x, z);
+            }
+            return;
+        }
+    }
+}
+
+/* Log the colliders near the player (flags, bounding box, triangles), the entities,
+ * the bound triggers and the result of wall probes in eight directions, for
+ * collision bug reports. */
 void port_testing_dump_collision(void) {
     CollisionData* cd = &gCollisionData;
     PlayerStatus* ps = &gPlayerStatus;
@@ -262,6 +463,9 @@ void port_testing_dump_collision(void) {
 
     fprintf(stderr, "[collision] dump around player (%.1f %.1f %.1f): %d colliders, ignore mask %08X\n", px, py, pz,
             cd->numColliders, (unsigned)COLLIDER_FLAG_IGNORE_PLAYER);
+    fprintf(stderr, "  yaw target %.1f cur %.1f heading %.1f facing %.1f cam %.1f; overlaps nesting %d timeInAir %d\n",
+            ps->targetYaw, ps->curYaw, ps->heading, ps->spriteFacingAngle, gCameras[gCurrentCameraID].curYaw,
+            ps->enableCollisionOverlapsCheck, ps->timeInAir);
     for (i = 0; i < cd->numColliders && printed < 16; i++) {
         Collider* c = &cd->colliderList[i];
         f32 d;
@@ -273,10 +477,10 @@ void port_testing_dump_collision(void) {
         if (d > 120.0f) {
             continue;
         }
-        fprintf(stderr, "  #%d %s flags=%08X tris=%d verts=%d parentModel=%d aabb=(%.0f %.0f %.0f)-(%.0f %.0f %.0f) dist=%.1f\n",
-                i, collider_name(i), (unsigned)c->flags, c->numTriangles, c->numVertices, c->parentModelIndex,
+        fprintf(stderr, "  #%d %s flags=%08X tris=%d aabb=(%.0f %.0f %.0f)-(%.0f %.0f %.0f) dist=%.1f\n",
+                i, collider_name(i), (unsigned)c->flags, c->numTriangles,
                 c->aabb->min.x, c->aabb->min.y, c->aabb->min.z, c->aabb->max.x, c->aabb->max.y, c->aabb->max.z, d);
-        for (t = 0; t < c->numTriangles && t < 4; t++) {
+        for (t = 0; t < c->numTriangles && t < 12; t++) {
             ColliderTriangle* tri = &c->triangleTable[t];
             fprintf(stderr, "     tri%d v1=(%.0f %.0f %.0f) v2=(%.0f %.0f %.0f) v3=(%.0f %.0f %.0f) n=(%.2f %.2f %.2f) oneSided=%d\n",
                     t, tri->v1->x, tri->v1->y, tri->v1->z, tri->v2->x, tri->v2->y, tri->v2->z, tri->v3->x, tri->v3->y,
@@ -284,6 +488,29 @@ void port_testing_dump_collision(void) {
         }
         printed++;
     }
+
+    fprintf(stderr, "  entities:");
+    for (i = 0; i < MAX_ENTITIES; i++) {
+        Entity* e = get_entity_by_index(i);
+        if (e == NULL) {
+            continue;
+        }
+        fprintf(stderr, " [%d type %d flags %08X alpha %d pos (%.0f %.0f %.0f) size %.1f aabb (%d %d %d)]", i, e->type,
+                (unsigned)e->flags, e->alpha, e->pos.x, e->pos.y, e->pos.z, e->effectiveSize, e->aabb.x, e->aabb.y,
+                e->aabb.z);
+    }
+    fprintf(stderr, "\n  triggers:");
+    if (gCurrentTriggerListPtr != NULL) {
+        for (i = 0; i < MAX_TRIGGERS; i++) {
+            Trigger* tr = (*gCurrentTriggerListPtr)[i];
+            if (tr == NULL) {
+                continue;
+            }
+            fprintf(stderr, " [%d flags %08X collider %ld prompt %d]", i, (unsigned)tr->flags,
+                    (long)tr->location.colliderID, tr->hasPlayerInteractPrompt);
+        }
+    }
+    fprintf(stderr, "\n");
 
     fprintf(stderr, "  wall probes from the player (26 units, +10 up), yaw:hit@depth:");
     for (i = 0; i < 8; i++) {
@@ -299,6 +526,18 @@ void port_testing_dump_collision(void) {
             fprintf(stderr, " %d:%d(%s)@%.1f", (int)yaw, hit, collider_name(hit), depth);
         } else {
             fprintf(stderr, " %d:-", (int)yaw);
+        }
+    }
+    fprintf(stderr, "\n  movement probes (player_test_move_with_slipping, 2 units), yaw:hit:");
+    if (get_game_mode() == GAME_MODE_WORLD) {
+        for (i = 0; i < 8; i++) {
+            f32 x = px, y = py, z = pz;
+            HitID hit = player_test_move_with_slipping(ps, &x, &y, &z, 2.0f, (f32)(i * 45));
+            if (hit >= 0) {
+                fprintf(stderr, " %d:%d(%s)", i * 45, hit, hit < cd->numColliders ? collider_name(hit) : "entity");
+            } else {
+                fprintf(stderr, " %d:-", i * 45);
+            }
         }
     }
     fprintf(stderr, "\n");

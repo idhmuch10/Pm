@@ -201,6 +201,38 @@ collider counts, partner position/floor). The port also logs the collider
 and vertex counts of every map, player animations without animation data,
 and a full player raster cache.
 
+### Sixth round: walls are walked through, the code is not the culprit
+
+Two more device reports (one saved while "standing in" the gate at
+(-274.8, 0, -28.9) of `kmr_02`, one east of the Goomba Road gate) show the
+player inside solid colliders (`mm1`, and past `tt2`) with `wall -1` while
+`floor` is always right, and the report dumps show correctly decoded
+collider data (flags, bounding boxes, one-sided wall quads with sane normals,
+the same script-driven `COLLIDER_FLAGS_UPPER_MASK` changes as on N64).
+The wall path (`test_ray_colliders` -> `test_ray_triangle_horizontal`) reads
+as platform-neutral, so it was tested instead of read:
+`tools/port/collision_harness` builds `src/collision.c`, `src/43F0.c` and
+`port/testing_bridge.c` unchanged, once with the host compiler and once with
+the NDK's clang for aarch64 as a static Bionic executable run under
+`qemu-aarch64` (same `-O1 -fno-strict-aliasing -fwrapv -fsigned-char` as the
+APK). Both produce byte-identical output for the loader, the down/horizontal/
+general ray tests, `sin_cos_rad`/`atan2`/`_wrap_trig_lookup_value` and the
+movement code copied from `src/77480.c`: a player walking into a one-sided
+gate is stopped at the collider radius on both. So the compiled code is fine
+and the phone differs in what it feeds it at runtime. The port now records
+that directly: every map load ray-tests all of its own wall and floor
+triangles (`[collision] self-check`), and a per-frame watchdog in
+`update_player` detects the player's position passing through a solid wall
+triangle, logs the move, the player/collision state and yaws, and repeats the
+game's wall ray, entity ray and movement test from the previous position.
+The report dump also lists all entities and triggers, every triangle of the
+nearby colliders and the movement test in eight directions. The harness runs
+in CI for both architectures. Findings this round that are not bugs: the
+gate collider `mm1` is genuinely solid at that story state (only the
+`EVS_ReturnToVillage`/gate-opening scripts clear it), `o757` is made passable
+by `kmr_02`'s own main script, and the odd floor fan of collider #61 (a
+repeated vertex and a downward sliver) is what the map data contains.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

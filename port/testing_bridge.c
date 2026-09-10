@@ -6,6 +6,9 @@
 #include "game_modes.h"
 #include "fio.h"
 #include "map.h"
+#include "model.h"
+
+extern ShapeFile gMapShapeData;
 #include "testing_bridge.h"
 #include "port_paths.h"
 #include <limits.h>
@@ -211,11 +214,37 @@ static f32 aabb_distance_xz(ColliderBoundingBox* aabb, f32 x, f32 z) {
     return sqrtf(dx * dx + dz * dz);
 }
 
+/* The port keeps the map's name table as the raw N64 array: big-endian 32-bit
+ * addresses (0x80210000-based) into the shape buffer gMapShapeData. */
 static const char* collider_name(int index) {
     MapSettings* settings = get_current_map_settings();
-    if (settings != NULL && settings->colliderNameList != NULL && index >= 0 && index < gCollisionData.numColliders &&
-        settings->colliderNameList[index] != NULL) {
-        return settings->colliderNameList[index];
+    const u8* base = (const u8*)&gMapShapeData;
+    const u8* table;
+    u32 n64Addr;
+    u32 offset;
+    const char* name;
+    int i;
+
+    if (settings == NULL || settings->colliderNameList == NULL || index < 0 || index >= gCollisionData.numColliders) {
+        return "?";
+    }
+    table = (const u8*)settings->colliderNameList + (size_t)index * 4;
+    n64Addr = ((u32)table[0] << 24) | ((u32)table[1] << 16) | ((u32)table[2] << 8) | (u32)table[3];
+    if (n64Addr < 0x80210000u) {
+        return "?";
+    }
+    offset = n64Addr - 0x80210000u;
+    if (offset >= 0x100000u) {
+        return "?";
+    }
+    name = (const char*)(base + offset);
+    for (i = 0; i < 32; i++) {
+        if (name[i] == '\0') {
+            return i > 0 ? name : "?";
+        }
+        if (name[i] < 0x20 || name[i] > 0x7E) {
+            return "?";
+        }
     }
     return "?";
 }

@@ -351,6 +351,21 @@ void load_hit_data(s32 idx, HitFile* hit) {
     fprintf(stderr, "[collision] loaded %s: %d colliders, %d vertices, %d aabb words\n",
             idx == 0 ? "colliders" : "zones", assetCollisionData->numColliders, assetCollisionData->numVertices,
             assetCollisionData->boundingBoxesDataSize);
+    if (idx == 0) {
+        // One line per collider so a report from any map carries the data behind
+        // collision bugs (index = COLLIDER_* id in the map header).
+        for (i = 0; i < assetCollisionData->numColliders; i++) {
+            Collider* c = &collisionData->colliderList[i];
+            if (c->numTriangles == 0 || c->aabb == NULL) {
+                fprintf(stderr, "[collision]  #%d flags=%08X tris=%d child=%d sibling=%d (no aabb)\n", i,
+                        (unsigned)c->flags, c->numTriangles, c->firstChild, c->nextSibling);
+            } else {
+                fprintf(stderr, "[collision]  #%d flags=%08X tris=%d child=%d sibling=%d aabb=(%.0f %.0f %.0f)-(%.0f %.0f %.0f)\n",
+                        i, (unsigned)c->flags, c->numTriangles, c->firstChild, c->nextSibling, c->aabb->min.x,
+                        c->aabb->min.y, c->aabb->min.z, c->aabb->max.x, c->aabb->max.y, c->aabb->max.z);
+            }
+        }
+    }
 #endif
 }
 

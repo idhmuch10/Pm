@@ -14,6 +14,9 @@
 #include <climits>
 #include <cstring>
 #include "testing_bridge.h"
+#if defined(__ANDROID__)
+#include "android/AndroidPort.h"
+#endif
 
 // CVar names
 #define PS_CVAR_INTERNAL_RES       CVAR_SETTING("InternalResolution")
@@ -381,10 +384,17 @@ void PaperShipMenu::DrawElement() {
 #elif defined(__linux__) && !defined(__ANDROID__)
         execl("/proc/self/exe", "/proc/self/exe", nullptr);
 #endif
-        // Android: the process simply exits; SDLActivity finishes and the launcher restarts it.
+#if defined(__ANDROID__)
+        // Android: the process exits (SDLActivity finishes); mark the session clean so the
+        // next launch does not treat the restart as a crash.
+        port_android_mark_clean_shutdown();
+#endif
         exit(0);
     }
     if (ImGui::Button("Exit Game", ImVec2(-1, 0))) {
+#if defined(__ANDROID__)
+        port_android_mark_clean_shutdown();
+#endif
         exit(0);
     }
 

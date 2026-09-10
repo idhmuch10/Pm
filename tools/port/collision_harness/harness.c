@@ -65,6 +65,8 @@ PlayerStatus gPlayerStatus;
 ShapeFile gMapShapeData;
 TriggerList* gCurrentTriggerListPtr;
 GameStatus sGameStatus;
+AreaConfig gAreas[29];
+PlayerData gPlayerData;
 GameStatus* gGameStatusPtr = &sGameStatus;
 s16 get_game_mode(void) { return GAME_MODE_WORLD; }
 

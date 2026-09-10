@@ -171,8 +171,9 @@ void port_testing_status_text(char* buf, size_t size) {
         return;
     }
     buf[0] = '\0';
-    n = append_status(buf, size, n, "Mode %d, map %s entry %d\n", get_game_mode(), port_testing_current_map(),
-                      gGameStatusPtr->entryID);
+    n = append_status(buf, size, n, "Mode %d, map %s entry %d, story %d, partner %d, load type %d\n", get_game_mode(),
+                      port_testing_current_map(), gGameStatusPtr->entryID, evt_get_variable(NULL, GB_StoryProgress),
+                      gPlayerData.curPartner, gGameStatusPtr->loadType);
     n = append_status(buf, size, n, "Player: pos %.1f %.1f %.1f  state %d  speed %.2f\n", ps->pos.x, ps->pos.y,
                       ps->pos.z, ps->actionState, ps->curSpeed);
     n = append_status(buf, size, n, "  anim %08X  flags %08X  animFlags %08X  collider h%d d%d\n", (unsigned)ps->anim,
@@ -426,6 +427,10 @@ void port_testing_watch_player_walls(f32 prevX, f32 prevY, f32 prevZ) {
                     ps->targetYaw, ps->curYaw, ps->heading, ps->spriteFacingAngle, gCameras[gCurrentCameraID].curYaw,
                     cs->curWall, cs->pushingAgainstWall, cs->curFloor, ps->enableCollisionOverlapsCheck, ps->timeInAir,
                     ps->pushVel.x, ps->pushVel.y, ps->pushVel.z);
+            fprintf(stderr, "    map %s entry %d story %d partner %d; collider aabb (%.0f %.0f %.0f)-(%.0f %.0f %.0f)\n",
+                    port_testing_current_map(), gGameStatusPtr->entryID, evt_get_variable(NULL, GB_StoryProgress),
+                    gPlayerData.curPartner, c->aabb->min.x, c->aabb->min.y, c->aabb->min.z, c->aabb->max.x,
+                    c->aabb->max.y, c->aabb->max.z);
             log_wall_ray("re-test from old pos, +10.01, len+13", x0, y0, z0, cx, cz, moveLen + 13.0f);
             log_wall_ray("re-test from old pos, +10.01, len 40", x0, y0, z0, cx, cz, 40.0f);
             log_wall_ray("re-test from old pos, +0.1", x0, prevY + 0.1f, z0, cx, cz, moveLen + 13.0f);

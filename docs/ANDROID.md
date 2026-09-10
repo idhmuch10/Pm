@@ -142,6 +142,15 @@ Two collision checks also run on their own and only need the log:
   whether the ray test misses the door (data or code) or hits it while the
   game ignored the result (flow, e.g. an entity or a script state).
 
+One caveat when using the warp shortcuts for this: the game's walls are mostly
+one-sided, and a map's scripts only make the gates and doors solid from the
+side the story lets you reach. Warping to an entry the current story progress
+would never take you to (Goomba Village entry 0 with a fresh save, for
+example) can spawn Mario behind a closed gate, and walking out of it from
+behind is the original game's behaviour, not a port bug. The status block now
+prints the story progress, partner and load type so a report shows which case
+it is; the watchdog line names the wall and prints its bounding box.
+
 ## Debugging and reporting crashes
 
 * All `fprintf(stderr, ...)`/`SPDLOG` output from the port goes to logcat under the

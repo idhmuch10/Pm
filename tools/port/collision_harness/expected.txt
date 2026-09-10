@@ -47,6 +47,7 @@ watchdog: move through the gate
 [collision] PLAYER CROSSED WALL #1 (?) tri1 flags=00000000 oneSided=1 n=(1.00 0.00 -0.00) at (-273.0 10.0 -28.0)
     move (-250.00 0.00 -28.00) -> (-280.00 0.00 -28.00) len 30.00, speed 0.00 state 0 flags 00000000 animFlags 00000000
     yaw target 0.0 cur 0.0 heading 0.0 facing 0.0 cam 0.0; curWall 0 pushing 0 floor 0; overlaps nesting 0 timeInAir 0 pushVel (0.00 0.00 0.00)
+    map ? entry 0 story 0 partner 0; collider aabb (-274 -1 -60)-(-272 101 4)
     re-test from old pos, +10.01, len+13: hit #1 (?) at depth 23.00 of 43.00, point (-273.0 10.0 -28.0) n=(1.00 0.00 -0.00)
     re-test from old pos, +10.01, len 40: hit #1 (?) at depth 23.00 of 40.00, point (-273.0 10.0 -28.0) n=(1.00 0.00 -0.00)
     re-test from old pos, +0.1: hit #1 (?) at depth 23.00 of 43.00, point (-273.0 0.1 -28.0) n=(1.00 0.00 -0.00)

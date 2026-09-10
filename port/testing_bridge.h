@@ -44,6 +44,9 @@ void port_testing_status_text(char* buf, size_t size);
  * in eight directions (part of the report). */
 void port_testing_dump_collision(void);
 
+/* Log every map model with a script transform (doors, gates, cutscene props). */
+void port_testing_dump_models(void);
+
 /* Ray-test every wall and floor triangle of the loaded map against itself (map load). */
 void port_testing_collision_selfcheck(void);
 

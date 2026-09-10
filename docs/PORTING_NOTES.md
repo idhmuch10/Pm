@@ -226,8 +226,11 @@ triangles (`[collision] self-check`), and a per-frame watchdog in
 triangle, logs the move, the player/collision state and yaws, and repeats the
 game's wall ray, entity ray and movement test from the previous position.
 The report dump also lists all entities and triggers, every triangle of the
-nearby colliders and the movement test in eight directions. The harness runs
-in CI for both architectures. Findings this round that are not bugs: the
+nearby colliders, the movement test in eight directions and every map model
+that carries a script transform (the revival scene hides Mario behind bushes
+that `TranslateModel` slides apart, and its "clipping" character is Goombaria
+walking through those bushes, so the model list is the data for that report).
+The harness runs in CI for both architectures. Findings this round that are not bugs: the
 gate collider `mm1` is genuinely solid at that story state (only the
 `EVS_ReturnToVillage`/gate-opening scripts clear it), `o757` is made passable
 by `kmr_02`'s own main script, and the odd floor fan of collider #61 (a

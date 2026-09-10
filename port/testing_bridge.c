@@ -216,10 +216,9 @@ static f32 aabb_distance_xz(ColliderBoundingBox* aabb, f32 x, f32 z) {
     return sqrtf(dx * dx + dz * dz);
 }
 
-/* The port keeps the map's name table as the raw N64 array: big-endian 32-bit
+/* The port keeps a map's name tables as the raw N64 arrays: big-endian 32-bit
  * addresses (0x80210000-based) into the shape buffer gMapShapeData. */
-static const char* collider_name(int index) {
-    MapSettings* settings = get_current_map_settings();
+static const char* name_from_table(const void* list, int index) {
     const u8* base = (const u8*)&gMapShapeData;
     const u8* table;
     u32 n64Addr;
@@ -227,10 +226,10 @@ static const char* collider_name(int index) {
     const char* name;
     int i;
 
-    if (settings == NULL || settings->colliderNameList == NULL || index < 0 || index >= gCollisionData.numColliders) {
+    if (list == NULL || index < 0) {
         return "?";
     }
-    table = (const u8*)settings->colliderNameList + (size_t)index * 4;
+    table = (const u8*)list + (size_t)index * 4;
     n64Addr = ((u32)table[0] << 24) | ((u32)table[1] << 16) | ((u32)table[2] << 8) | (u32)table[3];
     if (n64Addr < 0x80210000u) {
         return "?";
@@ -249,6 +248,62 @@ static const char* collider_name(int index) {
         }
     }
     return "?";
+}
+
+static const char* collider_name(int index) {
+    MapSettings* settings = get_current_map_settings();
+    if (settings == NULL || index >= gCollisionData.numColliders) {
+        return "?";
+    }
+    return name_from_table(settings->colliderNameList, index);
+}
+
+static const char* model_name(int treeIndex) {
+    MapSettings* settings = get_current_map_settings();
+    if (settings == NULL || treeIndex >= MAX_MODELS) {
+        return "?";
+    }
+    return name_from_table(settings->modelNameList, treeIndex);
+}
+
+/* Log every map model that carries a script transform (TranslateModel/RotateModel/
+ * ScaleModel or a transform group): flags, matrix state and the translation and
+ * diagonal of the user matrix. Doors, gates and cutscene props are drawn through
+ * this path, so a report saved while one looks wrong shows what the game asked for. */
+void port_testing_dump_models(void) {
+    int i, printed = 0, total = 0, hidden = 0;
+
+    if (gCurrentModels == NULL) {
+        fprintf(stderr, "[models] no model list\n");
+        return;
+    }
+    for (i = 0; i < MAX_MODELS; i++) {
+        Model* m = (*gCurrentModels)[i];
+        f32 (*u)[4];
+        int transformed;
+        if (m == NULL) {
+            continue;
+        }
+        total++;
+        if (m->flags & MODEL_FLAG_HIDDEN) {
+            hidden++;
+        }
+        u = m->userTransformMtx;
+        transformed = (m->flags & (MODEL_FLAG_HAS_TRANSFORM | MODEL_FLAG_MATRIX_DIRTY | MODEL_FLAG_TRANSFORM_GROUP_MEMBER)) != 0 ||
+                      u[3][0] != 0.0f || u[3][1] != 0.0f || u[3][2] != 0.0f ||
+                      u[0][0] != 1.0f || u[1][1] != 1.0f || u[2][2] != 1.0f ||
+                      u[0][1] != 0.0f || u[0][2] != 0.0f || u[1][0] != 0.0f || u[1][2] != 0.0f || u[2][0] != 0.0f || u[2][1] != 0.0f;
+        if (!transformed || printed >= 48) {
+            continue;
+        }
+        printed++;
+        fprintf(stderr, "[models]  #%d %s id %d flags %04X fresh %d baked %d final %s center (%.0f %.0f %.0f) user T=(%.1f %.1f %.1f) diag=(%.2f %.2f %.2f) rot=(%.2f %.2f %.2f)\n",
+                i, model_name(m->modelID), m->modelID, m->flags, m->matrixFreshness, m->bakedMtx != NULL,
+                m->finalMtx == NULL ? "null" : (m->finalMtx == &m->savedMtx ? "saved" : "stack"),
+                m->center.x, m->center.y, m->center.z, u[3][0], u[3][1], u[3][2], u[0][0], u[1][1], u[2][2],
+                u[0][2], u[1][0], u[2][0]);
+    }
+    fprintf(stderr, "[models] %d models, %d hidden, %d with a transform listed\n", total, hidden, printed);
 }
 
 static f32 unit_xz(f32* dx, f32* dz) {
@@ -556,6 +611,7 @@ int port_testing_request_report(char* msg, size_t msgSize) {
     fprintf(stderr, "[status] report requested\n%s", status);
     if (get_game_mode() == GAME_MODE_WORLD) {
         port_testing_dump_collision();
+        port_testing_dump_models();
     }
     fflush(stdout);
     fflush(stderr);

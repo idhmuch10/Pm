@@ -119,8 +119,12 @@ do not crash the game:
   and save or share the report. The report also carries the live status block
   and, in the world, a dump of the colliders around Mario (names, flags,
   bounding boxes, triangles), the entities and bound triggers, wall probes in
-  eight directions and the result of the game's own movement test
-  (`player_test_move_with_slipping`) in eight directions.
+  eight directions, the result of the game's own movement test
+  (`player_test_move_with_slipping`) in eight directions, and a `[models]`
+  list of every map model that currently carries a script transform (doors,
+  gates, the bushes that slide apart in the revival scene) with its flags,
+  matrix state and translation. Saving a report during a cutscene where a
+  prop or a character looks wrong is the way to get that data.
 * **Live status** shows the player position, action state and flags, the
   collision ids the game currently sees (floor, wall, inspect target, pushing),
   the collider count of the map and the partner's position/floor. When Mario

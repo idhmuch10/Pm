@@ -198,7 +198,10 @@ it is; the watchdog line names the wall and prints its bounding box.
 the game, and needs no ROM:
 
 * `port/rom_offsets.c` checks that every N64 linker symbol resolves to its own
-  ROM offset (this is the check that would have caught the invisible damage
+  ROM offset, and that a known entity's ROM segment still has a real size in that
+  table (the bounds are 1-byte placeholders here, so code that sizes a segment by
+  subtracting them gets 1; that is what wrote entity data over the map's
+  collision, see `docs/PORTING_NOTES.md`) (this is the check that would have caught the invisible damage
   numbers: zero-length stub symbols shared addresses on Android/Linux, see
   `docs/PORTING_NOTES.md`);
 * `port/ShaderSelfTest.cpp` renders every combiner mode the game uses (136

@@ -2227,6 +2227,23 @@ int rom_offsets_selfcheck(int verbose) {
     }
     fprintf(stderr, "[rom_offsets] %d mappings, %d resolve to the wrong offset%s\n", (int)ROM_MAPPING_COUNT, bad,
             bad ? " (stub symbols share addresses; see port/ld_addrs_stubs.c)" : "");
+
+    /* A segment's length must come from this table. The bounds are 1-byte placeholder
+     * symbols here, so code that subtracts them (as the N64 build does) gets nothing
+     * like the length; entity data sized that way was written over the collision heap. */
+    {
+        u32 size = port_rom_segment_size(entity_model_Hammer1Block_ROM_START, entity_model_Hammer1Block_ROM_END);
+        long symbols = (long)((const u8*)entity_model_Hammer1Block_ROM_END -
+                              (const u8*)entity_model_Hammer1Block_ROM_START);
+        if (size == 0) {
+            bad++;
+            fprintf(stderr, "[rom_offsets] a known entity segment has no size in the table\n");
+        }
+        if (verbose) {
+            fprintf(stderr, "[rom_offsets] entity_model_Hammer1Block: %u bytes from the table, %ld between the bound "
+                            "symbols (sizes must come from the table)\n", size, symbols);
+        }
+    }
     return bad;
 }
 

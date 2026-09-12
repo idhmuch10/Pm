@@ -242,9 +242,15 @@ EvtScript N(EVS_TakeTurn) = {
 
 EvtScript N(EVS_ShakeTree) = {
     SetTimescale(Float(2.0))
+#ifdef PORT
+    // A ShakeTreeConfig is five pointers, and BufRead reads a word at a time, which
+    // splits each of them in half on a 64-bit build (see common/FoliageTransform.inc.c).
+    Call(N(UnpackShakeTreeConfig), LVar0, LVar1, LVar2, LVar3, LVar4, LVar5)
+#else
     UseBuf(LVar0)
     BufRead4(LVar1, LVar2, LVar3, LVar4)
     BufRead1(LVar5)
+#endif
     Call(GetActorPos, ACTOR_PLAYER, LVar6, LVarF, LVar8)
     Call(PlaySound, SOUND_SMACK_TREE)
     Call(PlaySound, SOUND_SHAKE_TREE_LEAVES)

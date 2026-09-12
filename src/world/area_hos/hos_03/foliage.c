@@ -5,9 +5,15 @@
 
 EvtScript N(EVS_ShakeTree_StarHaven) = {
     SetTimescale(Float(2.0))
+#ifdef PORT
+    // A ShakeTreeConfig is five pointers, and BufRead reads a word at a time, which
+    // splits each of them in half on a 64-bit build (see common/FoliageTransform.inc.c).
+    Call(N(UnpackShakeTreeConfig), LVar0, LVar1, LVar2, LVar3, LVar4, LVar5)
+#else
     UseBuf(LVar0)
     BufRead4(LVar1, LVar2, LVar3, LVar4)
     BufRead1(LVar5)
+#endif
     Call(GetPlayerPos, LVar6, LVarF, LVar8)
     Call(PlaySoundAtPlayer, SOUND_SMACK_TREE, SOUND_SPACE_DEFAULT)
     Call(PlaySoundAtPlayer, SOUND_SHAKE_TREE_LEAVES, SOUND_SPACE_DEFAULT)

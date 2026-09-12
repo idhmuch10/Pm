@@ -698,17 +698,49 @@ static inline s32 port_buf_read_next(Bytecode** bufPtr) {
 // port_buf_peek, port_array_get, port_array_set now in evt.h
 #endif
 
+#ifdef PORT
+/**
+ * A script buffer is always the address of static data, so a value far too small to be
+ * a pointer means one was split in half: BufRead moves a word at a time, and a struct of
+ * pointers read that way yields each half separately (see common/FoliageTransform.inc.c,
+ * whose Unpack callables exist for exactly this). Refuse it, and say so, rather than
+ * letting the next BufRead fault on it.
+ */
+static Bytecode* port_evt_check_buffer(Evt* script, intptr_t value) {
+    if (value != 0 && value < 0x10000) {
+        static s32 sComplaints = 0;
+
+        if (sComplaints < 10) {
+            sComplaints++;
+            fprintf(stderr, "[evt] UseBuf given %ld, which is not a pointer (a struct of pointers read "
+                            "with BufRead?): script %p opcode %d line %p\n",
+                    (long)value, (void*)script, script->curOpcode, (void*)script->ptrCurLine);
+        }
+        return NULL;
+    }
+    return (Bytecode*)value;
+}
+#endif
+
 ApiStatus evt_handle_set_int_buffer_ptr(Evt* script) {
     Bytecode* args = script->ptrReadPos;
 
+#ifdef PORT
+    script->buffer = port_evt_check_buffer(script, (intptr_t) evt_get_variable(script, *args++));
+#else
     script->buffer = (Bytecode*)(intptr_t) evt_get_variable(script, *args++);
+#endif
     return ApiStatus_DONE2;
 }
 
 ApiStatus evt_handle_set_float_buffer_ptr(Evt* script) {
     Bytecode* args = script->ptrReadPos;
 
+#ifdef PORT
+    script->buffer = port_evt_check_buffer(script, (intptr_t) evt_get_variable(script, *args++));
+#else
     script->buffer = (Bytecode*)(intptr_t) evt_get_variable(script, *args++);
+#endif
     return ApiStatus_DONE2;
 }
 
@@ -1018,30 +1050,29 @@ ApiStatus evt_handle_OR_const(Evt* script) {
     return ApiStatus_DONE2;
 }
 
-// PORT: Ring buffer for crash diagnosis
+// PORT: the API functions the interpreter called most recently. A script reaches its
+// API functions through a pointer, so a crash inside one leaves nothing in the backtrace
+// that names it; the crash report prints this ring instead.
 #ifdef PORT
 #include <stdio.h>
-#include <signal.h>
 static struct { void* func; char type; } sEvtCallRing[128];
 static int sEvtCallRingIdx = 0;
-static void evt_crash_dump(int sig) {
-    FILE* f = fopen("/tmp/evt_crash.log", "w");
-    if (!f) _exit(1);
-    extern ApiStatus evt_handle_call(Evt* script);
-    fprintf(f, "SLIDE evt_handle_call=%p\n", (void*)evt_handle_call);
-    for (int i = 0; i < 128; i++) {
-        int idx = (sEvtCallRingIdx + i) % 128;
-        if (sEvtCallRing[idx].func)
-            fprintf(f, "%c %p\n", sEvtCallRing[idx].type, sEvtCallRing[idx].func);
+
+/** Fill funcs/types with up to max recent API calls, newest first. Returns how many. */
+s32 port_evt_recent_calls(void** funcs, char* types, s32 max) {
+    s32 n = 0;
+    s32 i;
+
+    for (i = 0; i < 128 && n < max; i++) {
+        s32 idx = ((sEvtCallRingIdx - 1 - i) % 128 + 128) % 128;
+        if (sEvtCallRing[idx].func == NULL) {
+            break;
+        }
+        funcs[n] = sEvtCallRing[idx].func;
+        types[n] = sEvtCallRing[idx].type;
+        n++;
     }
-    fclose(f);
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
-__attribute__((constructor)) static void evt_install_crash_handler(void) {
-    signal(SIGSEGV, evt_crash_dump);
-    signal(SIGBUS, evt_crash_dump);
-    signal(SIGABRT, evt_crash_dump);
+    return n;
 }
 #endif
 

@@ -39,6 +39,9 @@
 #include <ship/window/gui/GuiWindow.h>
 
 #include "android/AndroidPort.h"
+
+// src/evt/evt.c: the API functions the script interpreter called most recently.
+extern "C" s32 port_evt_recent_calls(void** funcs, char* types, s32 max);
 #include "port_paths.h"
 
 extern "C" {
@@ -312,6 +315,31 @@ static void CrashHandler(int sig, siginfo_t* info, void*) {
         }
         __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, line);
         CrashWrite(fd, line);
+    }
+
+    // The script interpreter reaches its API functions through a pointer, so a crash
+    // inside one leaves nothing in the backtrace that names it. These do.
+    {
+        void* funcs[12];
+        char types[12];
+        s32 n = port_evt_recent_calls(funcs, types, 12);
+        if (n > 0) {
+            CrashWrite(fd, "\nScript API calls, newest first (C = first call, B = resumed):\n");
+            for (s32 i = 0; i < n; i++) {
+                Dl_info dlinfo;
+                char line[512];
+                if (dladdr(funcs[i], &dlinfo) != 0 && dlinfo.dli_fbase != nullptr) {
+                    uintptr_t offset =
+                        reinterpret_cast<uintptr_t>(funcs[i]) - reinterpret_cast<uintptr_t>(dlinfo.dli_fbase);
+                    snprintf(line, sizeof(line), "  %c pc %08lx %s\n", types[i], (unsigned long)offset,
+                             dlinfo.dli_sname != nullptr ? dlinfo.dli_sname : "");
+                } else {
+                    snprintf(line, sizeof(line), "  %c %p\n", types[i], funcs[i]);
+                }
+                __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, line);
+                CrashWrite(fd, line);
+            }
+        }
     }
 
     // Recent log lines (never block on the mutex from a signal handler).

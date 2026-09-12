@@ -280,6 +280,28 @@ already did this, which is why only simple entities corrupted memory). A bounds
 check on the entity heap reports any write that leaves it, and the report's
 per-frame integrity check on the bounding boxes stays as a regression guard.
 
+### Eighth round: doors confirmed, and a script crash in the Goomba King fight
+
+The device confirmed doors work. It then crashed (SIGSEGV, fault address 0x74) when
+Goombario shook the Goomnut Tree in that battle. The backtrace named only
+`evt_execute_next_command`, because a script reaches its API functions through a
+pointer, but the fault address gave it away: `ShakeTreeConfig` is five pointers and
+the battle's `EVS_ShakeTree` reads them with `UseBuf`/`BufRead`, which moves a word
+at a time and so splits each pointer in half on a 64-bit build. The script then used
+the *upper* half of the first pointer as the next buffer address, and on Android the
+library loads around 0x74xxxxxxxx, so that half is 0x74 exactly.
+
+`common/FoliageTransform.inc.c` already provides `UnpackShakeTreeConfig` and
+`UnpackSearchBushConfig` for this, and `common/foliage.inc.c` uses them; two copies
+of the script never got the fix, in the Goomba King battle and in Star Haven
+(`hos_03`). Both now call the unpack callable under `PORT`.
+
+To stop the class rather than the instance, `UseBuf` rejects a value too small to be
+a pointer and says so in the log instead of letting the next `BufRead` fault, and the
+Android crash report now lists the API functions the interpreter called most recently
+(the ring buffer that already existed in `evt.c`, which previously fed a desktop-only
+handler that also competed for `SIGSEGV` with the port's own).
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

@@ -232,6 +232,10 @@ runs it under `qemu-aarch64` (`apt-get install qemu-user`), which is how the
 collision code was shown to behave identically on ARM64 and x86-64. CI runs
 both (the `build` job the Android one, `selftest` the host one).
 
+A crash report also lists the script API functions the interpreter called most
+recently, newest first. A script calls those through a pointer, so a crash inside one
+shows up in the backtrace only as `evt_execute_next_command`; that list names it.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

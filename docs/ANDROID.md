@@ -145,6 +145,11 @@ Two collision checks also run on their own and only need the log:
   `test_ray_colliders`, so `walls N hit / 0 other / N total` means the ray test
   works on this device for this map's data, and a `MISS` line names a
   triangle it does not;
+* every frame the port compares the map's collider bounding boxes with a copy
+  taken when the map loaded. Nothing in the game writes them outside the loader,
+  so `[collision] BOUNDING BOXES OVERWRITTEN` means something else wrote over the
+  start of the collision heap; the line says how many words changed, which
+  collider they belong to, the frame number and the old and new bytes;
 * whenever Mario's movement in one frame passes through a solid wall triangle
   the port logs `[collision] PLAYER CROSSED WALL #id (name)` (or, when the wall
   is one-sided and he came through its back, `FROM BEHIND (not solid from this

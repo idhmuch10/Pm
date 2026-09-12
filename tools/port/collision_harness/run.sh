@@ -54,7 +54,8 @@ for attempt in 1 2 3 4; do
   while read -r sym; do echo "void $sym(void) {}" >> "$STUBS"; done < "$OUT/undef.txt"
 done
 
-$RUN "$OUT/harness" > "$OUT/actual.txt" 2>&1
+# Heap addresses differ per run (ASLR), so normalise them before comparing.
+$RUN "$OUT/harness" 2>&1 | sed -E 's/0x[0-9a-f]{6,}/0xADDR/g' > "$OUT/actual.txt"
 if [ -n "$UPDATE_EXPECTED" ]; then
   cp "$OUT/actual.txt" expected.txt
   echo "collision harness ($MODE): expected.txt updated ($(wc -l < expected.txt) lines)"

@@ -229,6 +229,14 @@ typedef struct ColliderSnapshot {
 static ColliderSnapshot sLoadState[512];
 static int sLoadStateCount = 0;
 
+/* A copy of the map's bounding-box array as loaded. The colliders' boxes are one
+ * block at the very start of the collision heap, so a stray write from anywhere
+ * lands in it; comparing every frame says when that happens and what did it. */
+static u32 sAabbCopy[2048];
+static u32 sAabbWords = 0;
+static const u32* sAabbLive = NULL;
+static int sIntegrityReports = 0;
+
 static f32 aabb_distance_xz(ColliderBoundingBox* aabb, f32 x, f32 z) {
     f32 dx = 0.0f;
     f32 dz = 0.0f;
@@ -373,6 +381,23 @@ void port_testing_collision_selfcheck(void) {
     if (sLoadStateCount > (int)(sizeof(sLoadState) / sizeof(sLoadState[0]))) {
         sLoadStateCount = (int)(sizeof(sLoadState) / sizeof(sLoadState[0]));
     }
+    /* Snapshot the bounding-box block: its extent is the furthest box any collider uses. */
+    sAabbLive = (const u32*)cd->aabbs;
+    sAabbWords = 0;
+    sIntegrityReports = 0;
+    for (i = 0; i < cd->numColliders; i++) {
+        Collider* c = &cd->colliderList[i];
+        if (c->numTriangles != 0 && c->aabb != NULL && sAabbLive != NULL) {
+            u32 end = (u32)((const u32*)c->aabb - sAabbLive) + (u32)(sizeof(ColliderBoundingBox) / 4);
+            if (end > sAabbWords && end <= (u32)(sizeof(sAabbCopy) / sizeof(sAabbCopy[0]))) {
+                sAabbWords = end;
+            }
+        }
+    }
+    if (sAabbLive != NULL && sAabbWords != 0) {
+        memcpy(sAabbCopy, sAabbLive, sAabbWords * sizeof(u32));
+    }
+
     for (i = 0; i < sLoadStateCount; i++) {
         Collider* c = &cd->colliderList[i];
         ColliderSnapshot* snap = &sLoadState[i];
@@ -439,6 +464,53 @@ void port_testing_collision_selfcheck(void) {
             wallHits, wallOther, walls, floorHits, floorOther, floors, degenerate);
 }
 
+/* Compare the collider bounding boxes with the copy taken at map load. Nothing in the
+ * game writes them outside load_hit_data and update_collider_transform, so a difference
+ * means something else wrote over the start of the collision heap. */
+static void check_collision_integrity(void) {
+    CollisionData* cd = &gCollisionData;
+    u32 i;
+    u32 first;
+    u32 differing = 0;
+    u32 last = 0;
+    int shown;
+
+    if (sAabbLive == NULL || sAabbWords == 0 || sIntegrityReports >= 3 ||
+        (const u32*)cd->aabbs != sAabbLive) {
+        return;
+    }
+    if (memcmp(sAabbCopy, sAabbLive, sAabbWords * sizeof(u32)) == 0) {
+        return;
+    }
+    sIntegrityReports++;
+
+    for (first = 0; first < sAabbWords && sAabbCopy[first] == sAabbLive[first]; first++) {
+        ;
+    }
+    for (i = 0; i < sAabbWords; i++) {
+        if (sAabbCopy[i] != sAabbLive[i]) {
+            differing++;
+            last = i;
+        }
+    }
+    fprintf(stderr,
+            "[collision] BOUNDING BOXES OVERWRITTEN: %u of %u words differ, first %u (collider ~#%u), last %u (collider ~#%u), frame %d\n",
+            differing, sAabbWords, first, first / (u32)(sizeof(ColliderBoundingBox) / 4), last,
+            last / (u32)(sizeof(ColliderBoundingBox) / 4),
+            gGameStatusPtr != NULL ? (int)gGameStatusPtr->frameCounter : -1);
+    fprintf(stderr, "    block at %p; was:", (const void*)sAabbLive);
+    for (i = first, shown = 0; i < sAabbWords && shown < 12; i++, shown++) {
+        fprintf(stderr, " %08X", (unsigned)sAabbCopy[i]);
+    }
+    fprintf(stderr, "\n    now:");
+    for (i = first, shown = 0; i < sAabbWords && shown < 12; i++, shown++) {
+        fprintf(stderr, " %08X", (unsigned)sAabbLive[i]);
+    }
+    fprintf(stderr, "\n");
+    // Keep the new state as the baseline so the next report is about the next event.
+    memcpy(sAabbCopy, sAabbLive, sAabbWords * sizeof(u32));
+}
+
 /* Called once per player update with the position the frame started from. If the
  * player's movement this frame passed through a solid wall triangle, log the event
  * and repeat the game's wall ray from the old position so the report shows what the
@@ -456,7 +528,11 @@ void port_testing_watch_player_walls(f32 prevX, f32 prevY, f32 prevZ) {
     f32 bbMinX, bbMaxX, bbMinY, bbMaxY, bbMinZ, bbMaxZ;
     int i, t;
 
-    if (get_game_mode() != GAME_MODE_WORLD || sLogged >= 24) {
+    if (get_game_mode() != GAME_MODE_WORLD) {
+        return;
+    }
+    check_collision_integrity();
+    if (sLogged >= 24) {
         return;
     }
     if (sCooldown > 0) {

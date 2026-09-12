@@ -410,5 +410,15 @@ int main(void) {
             printf("  step %2d: x=%.4f z=%.4f hit=%d\n", i, x, z, hit);
         }
     }
+    printf("integrity check: overwrite the start of the bounding box block\n");
+    {
+        u32* aabbs = (u32*)gCollisionData.aabbs;
+        aabbs[2] = 0xDEADBEEF;
+        aabbs[9] = 0x41424344;
+        gPlayerStatus.pos.x = 0; gPlayerStatus.pos.z = 0;
+        port_testing_watch_player_walls(0, 0, 0);
+        printf("  (second call must stay quiet until it changes again)\n");
+        port_testing_watch_player_walls(0, 0, 0);
+    }
     return 0;
 }

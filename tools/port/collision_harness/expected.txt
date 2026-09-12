@@ -133,3 +133,8 @@ walk into the diagonal door wall (yaw 330):
   step 17: x=41.9984 z=-141.1757 hit=-1
   step 18: x=40.9983 z=-142.9077 hit=-1
   step 19: x=39.9982 z=-144.6397 hit=-1
+integrity check: overwrite the start of the bounding box block
+[collision] BOUNDING BOXES OVERWRITTEN: 2 of 28 words differ, first 2 (collider ~#0), last 9 (collider ~#1), frame 0
+    block at 0xADDR; was: C3FA8000 43FA8000 3F800000 43FA8000 00000000 C3890000 BF800000 C2700000 C3880000 42CA0000 40800000 00000000
+    now: DEADBEEF 43FA8000 3F800000 43FA8000 00000000 C3890000 BF800000 41424344 C3880000 42CA0000 40800000 00000000
+  (second call must stay quiet until it changes again)

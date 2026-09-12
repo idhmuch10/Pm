@@ -755,6 +755,24 @@ void Gui::DrawGame() {
             size = ImVec2(float(mInterpreter.lock()->mCurDimensions.width) * factor,
                           float(mInterpreter.lock()->mCurDimensions.height) * factor);
         }
+    } else {
+        // PORT: the game is rendered at 4:3 (Interpreter::StartFrame), so its framebuffer
+        // has to be placed as the largest rectangle of that shape which fits, or the
+        // picture is stretched to whatever the window is. Every phone screen is wider
+        // than 4:3, and the game was being stretched nearly twice as wide on one.
+        const float renderWidth = (float)mInterpreter.lock()->mCurDimensions.width;
+        const float renderHeight = (float)mInterpreter.lock()->mCurDimensions.height;
+        if (renderWidth > 0.0f && renderHeight > 0.0f) {
+            const float fitWidth = size.y * renderWidth / renderHeight;
+            if (fitWidth <= size.x) { // pillarbox
+                pos = ImVec2(floor(size.x / 2.0f - fitWidth / 2.0f), 0.0f);
+                size = ImVec2(fitWidth, size.y);
+            } else { // letterbox
+                const float fitHeight = size.x * renderHeight / renderWidth;
+                pos = ImVec2(0.0f, floor(size.y / 2.0f - fitHeight / 2.0f));
+                size = ImVec2(size.x, fitHeight);
+            }
+        }
     }
     uintptr_t fb = Ship::Context::GetInstance()->GetWindow()->GetGfxFrameBuffer();
     if (fb) {

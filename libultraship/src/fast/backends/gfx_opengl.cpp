@@ -383,6 +383,10 @@ static std::string BuildVsShader(const CCFeatures& cc_features) {
 // Number of shader programs that failed to compile or link (read by the self-test).
 int gGfxOglShaderFailures = 0;
 
+// Number of distinct shader programs compiled (read by the self-test to say which
+// combiner produced which program id).
+int gGfxOglShaderCreations = 0;
+
 // Diagnostics for shader failures. PaperShip is tested with Metal; the GLSL path
 // (desktop OpenGL and, on Android, GLSL ES) had never been exercised, and a compile
 // failure used to abort() without printing the source.
@@ -431,6 +435,7 @@ ShaderProgram* GfxRenderingAPIOGL::CreateAndLoadNewShader(uint64_t shader_id0, u
     GLint success;
 
     // One line per new variant: the source can be regenerated offline from these ids.
+    gGfxOglShaderCreations++;
     fprintf(stderr, "[GfxOGL] new shader id0=%016llx id1=%08x (2cyc=%d alpha=%d fog=%d noise=%d edge=%d thr=%d tex0=%d tex1=%d)\n",
             (unsigned long long)shader_id0, shader_id1, cc_features.opt_2cyc, cc_features.opt_alpha,
             cc_features.opt_fog, cc_features.opt_noise, cc_features.opt_texture_edge, cc_features.opt_alpha_threshold,

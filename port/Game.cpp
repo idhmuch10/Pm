@@ -43,6 +43,7 @@ void gfx_task_background(void);
 
 // PORT: UI texture loader
 void port_load_ui_textures(void);
+extern "C" int port_window_selftest_run(void); // port/WindowRenderSelfTest.cpp
 void port_load_map_textures(void);
 
 // Game mode
@@ -260,6 +261,13 @@ void boot_main_pc() {
     // Load map-specific textures (dgb_01 bridges, pra_31 stairs, dro_02 cards, blanket)
     port_load_map_textures();
 
+    // One frame that draws a window with textures whose contents are known, then reads
+    // it back. A device whose driver renders it wrong says so in its next report, which
+    // is the difference between the window textures arriving wrong and the renderer
+    // using them wrong. It also prints the opacity the game's own corner textures ask
+    // for. Costs a frame at startup and puts the textures back when it is done.
+    port_window_selftest_run();
+
     fprintf(stderr, "[PaperShip] boot_main_pc: init complete\n");
 
     // Set the retrace callback (stored by our shim, called in push_frame)
@@ -336,6 +344,7 @@ int main(int argc, char* argv[]) {
         if (selftest[0] != '\0' && selftest[0] != '0') {
             int failures = rom_offsets_selfcheck(1);
             failures += port_shader_selftest_run();
+            failures += port_window_selftest_run();
             fprintf(stderr, "[selftest] %s (%d failure(s))\n", failures == 0 ? "PASSED" : "FAILED", failures);
             GameEngine::Instance->Destroy();
             return failures == 0 ? 0 : 1;

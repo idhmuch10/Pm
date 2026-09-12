@@ -20,8 +20,10 @@ extern "C" {
 }
 
 namespace Fast {
-extern int gGfxOglShaderFailures; // gfx_opengl.cpp
+extern int gGfxOglShaderFailures;  // gfx_opengl.cpp
+extern int gGfxOglShaderCreations; // gfx_opengl.cpp
 }
+using Fast::gGfxOglShaderCreations;
 using Fast::gGfxOglShaderFailures;
 
 namespace {
@@ -138,8 +140,15 @@ extern "C" int port_shader_selftest_run(void) {
         }
 
         int before = gGfxOglShaderFailures;
+        int createdBefore = gGfxOglShaderCreations;
         GameEngine::ProcessGfxCommands(dl);
         frames++;
+        if (gGfxOglShaderCreations != createdBefore) {
+            // Names the combiner behind the [GfxOGL] new shader lines just above, so a
+            // shader id seen in a device log can be traced back to its combine mode.
+            fprintf(stderr, "[selftest] the %d shader(s) above are (%s)\n", gGfxOglShaderCreations - createdBefore,
+                    sCombineCases[ci].name);
+        }
         if (gGfxOglShaderFailures != before) {
             fprintf(stderr, "[selftest] %d FAILURE(s) with combiner (%s); see the [GfxOGL] lines above\n",
                     gGfxOglShaderFailures - before, sCombineCases[ci].name);

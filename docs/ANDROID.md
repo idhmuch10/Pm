@@ -208,8 +208,19 @@ the game, and needs no ROM:
   pairs, generated into `port/shader_selftest_cases.inc` by
   `tools/port/gen_shader_selftest.py`; re-run it after adding combine modes)
   under a matrix of render/alpha/fog/cycle modes and counts shader compile or
-  link failures. On a `-DUSE_OPENGLES=ON` Linux build this exercises the same
-  GLSL ES 3.00 shader path as Android.
+  link failures, naming the combiner behind each shader it compiles so that a
+  shader id in a device log can be traced back to the drawing that asked for it.
+  On a `-DUSE_OPENGLES=ON` Linux build this exercises the same GLSL ES 3.00
+  shader path as Android;
+* `port/WindowRenderSelfTest.cpp` draws a game window with `draw_box()` over a
+  solid background and reads the pixels back, checking that its fill is opaque,
+  that both axes of the corner tile clamp, that the corners stay rounded and
+  that the window lands where it was put — once as a window already on screen
+  and once as one still opening (which goes through the 3D pipeline instead of
+  as rectangles). Nothing in the game says how opaque a window is: the alpha
+  comes from the corner tile's edge texel held by the tile's clamp, so it is
+  worth checking on its own. `PAPERSHIP_SELFTEST_DUMP=<path>.ppm` writes the
+  frames out to look at.
 
 ```sh
 cmake -S . -B build-gles -G Ninja -DCMAKE_BUILD_TYPE=Release -DUSE_OPENGLES=ON
@@ -220,7 +231,9 @@ cd build-gles && PAPERSHIP_SELFTEST=1 SDL_AUDIODRIVER=dummy \
 ```
 
 The same run is part of CI (`selftest-linux` job). Every normal boot also
-prints one `[rom_offsets]` summary line to the session log.
+prints one `[rom_offsets]` summary line to the session log, and runs the window
+render test once, so a device's report says whether that device draws a window
+correctly and what opacity the game's own window textures ask for.
 
 `tools/port/collision_harness/run.sh` is a second ROM-free check aimed at the
 door/wall bug: it builds a synthetic hit file, loads it through the real

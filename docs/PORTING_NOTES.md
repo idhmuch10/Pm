@@ -302,6 +302,63 @@ Android crash report now lists the API functions the interpreter called most rec
 (the ring buffer that already existed in `evt.c`, which previously fed a desktop-only
 handler that also competed for `SIGSEGV` with the port's own).
 
+### Ninth round: see-through message boxes and the pause menu
+
+The device reported the "You found the Hammer!" popup and the pause menu as
+broken. On the screenshot the window's white frame is drawn correctly and its
+rounded corners are right, but the world shows through the middle instead of
+the window's own fill, and there is a thin band of garbled glyphs just below it.
+
+Both windows come from `draw_box()`, which is the hardest thing the renderer is
+asked to do. It loads the background into tile 0 and one corner into tile 1,
+switches to two-cycle combining, and draws the window as four quadrants. Nothing
+in the game says how opaque the window is: `PM_CC_BOX1_OPAQUE` (message boxes)
+and `PM_CC_WINDOW_2` (the pause menu) both take the pixel's alpha from
+**TEXEL1**, the corner tile, which is only 16x16 and is set to clamp. Everything
+between the corners is therefore the corner tile's edge texel held by the clamp,
+and the window's middle is its inner corner texel. If that clamp does not
+happen, or that texel is not opaque, the window is see-through exactly as
+reported — and the same mechanism explains why the pause menu went with it.
+
+`port/WindowRenderSelfTest.cpp` renders that window and looks at the pixels.
+It builds its own corner texture whose alpha says which texel was sampled (the
+inner corner texel opaque, the rest of the tile half opaque, outside the rounded
+corner transparent), draws the window over a magenta background so that a
+pixel's green channel *is* the window's opacity, reads the framebuffer back and
+checks the fill is opaque, each edge clamped on one axis, the corner rounded,
+and the window where it was put. It runs both ways a message box is drawn: as
+rectangles once it is on screen, and through the 3D pipeline while it is still
+opening (`DRAW_FLAG_ROTSCALE`).
+
+All of it is correct under GLES 3.2 on Mesa, both at 4:3 and at the phone's
+window shape (`Window.Width`/`Window.Height` in `papership.cfg.json`), so the
+display list `draw_box()` builds, the two-tile setup, the two-cycle combiner and
+the per-axis clamping are all right in this build. That leaves the texture data
+and the device's own driver, which the same test now separates: the game runs it
+once at startup, and prints the fill alpha the game's real corner textures ask
+for before borrowing the arrays. A device whose next report says the fill alpha
+is 15 and the test still fails is a driver problem; one that reports a lower
+number was always going to draw a partly transparent window, and the complaint
+is about something else in that frame.
+
+Measuring the screenshot did find something else, which the test's own report of
+the frame geometry then confirmed: **the picture was stretched, not pillarboxed.**
+The first device report led to `Interpreter::StartFrame` rendering the game at
+4:3 whatever shape the window is, but `Gui::DrawGame` only placed the
+framebuffer to match in its N64 and advanced-resolution modes — by default it
+drew it across the whole window. On a screen 2.59:1 that is a 4:3 picture
+stretched nearly twice as wide, which is what the phone was showing: the message
+box in the screenshot is 296 units wide out of 320 and spans 95% of the screen,
+where a pillarboxed 4:3 picture would put it across half. The default path now
+places the framebuffer as the largest rectangle of the render's own shape that
+fits, the same rule the other two modes use.
+
+The test is part of `PAPERSHIP_SELFTEST`, so CI runs it on every push with no
+ROM. `PAPERSHIP_SELFTEST_DUMP=<path>.ppm` writes the frames out to look at.
+The self-test also names the combiner behind each shader it compiles, which is
+what identified the message box's shader (`id0=d000d328a0000108`) in a device log
+and confirmed the phone compiled the variant it should have.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

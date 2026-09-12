@@ -165,6 +165,9 @@ set(PM64_COMPILE_DEFINITIONS
     _LANGUAGE_C
     AVOID_UB=1
     PORT=1
+    # Same choice of GL headers libultraship makes for its own backend, so port code
+    # that talks to GL directly (the window render self-test) includes the right one.
+    $<$<BOOL:${USE_OPENGLES}>:USE_OPENGLES>
 )
 
 # Find necessary libraries

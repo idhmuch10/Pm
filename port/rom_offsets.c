@@ -2195,6 +2195,22 @@ u32 resolve_rom_offset(const void* addr) {
  * silently loaded the wrong ROM data; this catches any regression at boot and is
  * part of PAPERSHIP_SELFTEST. Returns the number of entries that resolve wrongly.
  */
+u32 port_rom_segment_size(const void* start_stub, const void* end_stub) {
+    u32 start = resolve_rom_offset(start_stub);
+    u32 end = resolve_rom_offset(end_stub);
+
+    if (start == 0xFFFFFFFF || end == 0xFFFFFFFF || end <= start) {
+        static int sComplaints = 0;
+        if (sComplaints < 10) {
+            sComplaints++;
+            fprintf(stderr, "[rom_offsets] segment %p..%p has no size (resolved 0x%X..0x%X)\n", start_stub, end_stub,
+                    start, end);
+        }
+        return 0;
+    }
+    return end - start;
+}
+
 int rom_offsets_selfcheck(int verbose) {
     int bad = 0;
     int shown = 0;

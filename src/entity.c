@@ -31,6 +31,39 @@ extern Addr WorldEntityHeapBase;
 #define entity_default_VRAM (void*) 0x802BAE00
 #endif
 
+#ifdef PORT
+#include "port/rom_offsets.h"
+
+// The N64 build gets a segment's length by subtracting its two bound symbols. The port
+// links each bound as its own 1-byte placeholder, so that difference is 1, not the
+// length: entity data would then be written at the top of the entity heap instead of
+// below it, i.e. straight into the collision heap, whose first bytes hold the map's
+// collider bounding boxes. Ask the ROM offset table for the real size instead.
+#define DMA_SEGMENT_WORDS(seg) ((s32)(port_rom_segment_size((seg).start, (seg).end) >> 2))
+
+// Entity data is placed just below the top of the world entity heap, and the collision
+// heap begins 16 bytes past that top, starting with the map's collider bounding boxes.
+// Report any write that leaves the heap instead of silently eating the map's collision.
+extern intptr_t gEntityHeapBase;   // defined below
+extern intptr_t gEntityHeapBottom;
+
+static void* entity_heap_dest(void* dest, s32 sizeBytes, const char* what) {
+    intptr_t start = (intptr_t)dest;
+
+    if (start < gEntityHeapBottom || start + sizeBytes > gEntityHeapBase) {
+        static s32 sComplaints = 0;
+        if (sComplaints < 10) {
+            sComplaints++;
+            fprintf(stderr, "[entity] %s writes %d bytes at %p, outside the entity heap [%p..%p)\n", what, sizeBytes,
+                    dest, (void*)gEntityHeapBottom, (void*)gEntityHeapBase);
+        }
+    }
+    return dest;
+}
+#else
+#define DMA_SEGMENT_WORDS(seg) (((s32)(seg).end - (s32)(seg).start) >> 2)
+#endif
+
 s32 D_8014AFB0 = 255;
 
 #ifdef PORT
@@ -899,8 +932,11 @@ void reload_world_entity_data(void) {
         if (!(bp->flags & ENTITY_FLAG_HAS_ANIMATED_MODEL)) {
             void* gfxData;
 
-            dataLength = ((bp->dma.end - bp->dma.start) >> 2);
+            dataLength = DMA_SEGMENT_WORDS(bp->dma);
             gfxData = (void*)(gEntityHeapBase - totalSize * 4 - dataLength * 4);
+#ifdef PORT
+            entity_heap_dest(gfxData, dataLength * 4, "reload_world_entity_data");
+#endif
             totalSize += dma_copy(bp->dma.start, bp->dma.end, gfxData) >> 2;
         } else {
 #ifdef PORT
@@ -919,12 +955,12 @@ void reload_world_entity_data(void) {
                 s32 temp5;
                 s32 q;
 
-                dataLength = ((dmaList[0].end - dmaList[0].start) >> 2);
+                dataLength = DMA_SEGMENT_WORDS(dmaList[0]);
                 q = gEntityHeapBase - totalSize * 4;
                 gfxData = (void*)(q - dataLength * 4);
                 totalSize += dma_copy(dmaList[0].start, dmaList[0].end, gfxData) >> 2;
 
-                dataLength = ((dmaList[1].end - dmaList[1].start) >> 2);
+                dataLength = DMA_SEGMENT_WORDS(dmaList[1]);
                 q = gEntityHeapBase - totalSize * 4;
                 animData = (void*)(q - dataLength * 4);
                 totalSize += dma_copy(dmaList[1].start, dmaList[1].end, animData) >> 2;
@@ -1002,7 +1038,7 @@ s32 is_entity_data_loaded(Entity* entity, EntityBlueprint* blueprint, s32* loade
             if (blueprint->flags & ENTITY_FLAG_HAS_ANIMATED_MODEL) {
                 s32 size;
                 entDmaList = blueprint->dmaList;
-                size = (entDmaList[0].end - entDmaList[0].start) >> 2;
+                size = DMA_SEGMENT_WORDS(entDmaList[0]);
                 *loadedEnd = *loadedStart + size;
             }
             break;
@@ -1012,24 +1048,24 @@ s32 is_entity_data_loaded(Entity* entity, EntityBlueprint* blueprint, s32* loade
             entDmaList = blueprint->dmaList;
             if (bpDmaList == entDmaList) {
                 if (blueprint->flags & ENTITY_FLAG_HAS_ANIMATED_MODEL) {
-                    s32 size = (bpDmaList[0].end - bpDmaList[0].start) >> 2;
+                    s32 size = DMA_SEGMENT_WORDS(bpDmaList[0]);
                     *loadedEnd = *loadedStart + size;
                 }
                 break;
             } else if (bp == blueprint) {
                 if (bp->flags & ENTITY_FLAG_HAS_ANIMATED_MODEL) {
-                    s32 size = (entDmaList[0].end - entDmaList[0].start) >> 2;
+                    s32 size = DMA_SEGMENT_WORDS(entDmaList[0]);
                     *loadedEnd = *loadedStart + size;
                 }
                 break;
             } else {
                 if (bp->flags & ENTITY_FLAG_HAS_ANIMATED_MODEL) {
-                    s32 size = (bpDmaList[0].end - bpDmaList[0].start) >> 2;
+                    s32 size = DMA_SEGMENT_WORDS(bpDmaList[0]);
                     *loadedEnd = *loadedStart = *loadedStart + size;
-                    size = (bpDmaList[1].end - bpDmaList[1].start) >> 2;
+                    size = DMA_SEGMENT_WORDS(bpDmaList[1]);
                     *loadedStart = *loadedStart + size;
                 } else {
-                    *loadedStart += (bp->dma.end - bp->dma.start) >> 2;
+                    *loadedStart += DMA_SEGMENT_WORDS(bp->dma);
                 }
             }
         }
@@ -1053,17 +1089,20 @@ void load_simple_entity_data(Entity* entity, EntityBlueprint* bp, s32 listIndex)
     }
 
     if (is_entity_data_loaded(entity, bp, &loadedStart, &loadedEnd)) {
-        if (totalSize + ((bp->dma.end - bp->dma.start) >> 2) > 0x5FFCU) {
+        if (totalSize + DMA_SEGMENT_WORDS(bp->dma) > 0x5FFCU) {
             get_entity_type(entity->listIndex);
             get_entity_type(entity->listIndex);
             PANIC();
         }
-        entitySize = (bp->dma.end - bp->dma.start) >> 2;
+        entitySize = DMA_SEGMENT_WORDS(bp->dma);
         entity->gfxBaseAddr = (void*)(gEntityHeapBase - totalSize * 4 - entitySize * 4);
+#ifdef PORT
+        entity_heap_dest(entity->gfxBaseAddr, entitySize * 4, "load_simple_entity_data");
+#endif
         totalSize += dma_copy(bp->dma.start, bp->dma.end, entity->gfxBaseAddr) >> 2;
         get_entity_type(entity->listIndex);
     } else {
-        entitySize = (bp->dma.end - bp->dma.start) >> 2;
+        entitySize = DMA_SEGMENT_WORDS(bp->dma);
         entity->gfxBaseAddr = (void*)(gEntityHeapBase - loadedStart * 4 - entitySize * 4);
         get_entity_type(entity->listIndex);
     }
@@ -1085,8 +1124,7 @@ void load_split_entity_data(Entity* entity, EntityBlueprint* entityData, s32 lis
         DmaEntry* dmaList = entityData->dmaList;
         entity->vertexSegment = 0xA;
 
-        // Get ROM sizes for gfx and anim segments
-        extern u32 resolve_rom_offset(void* addr);
+        // Get ROM sizes for gfx and anim segments (port/rom_offsets.h)
         u32 gfxRomStart = resolve_rom_offset(dmaList[0].start);
         u32 gfxRomEnd   = resolve_rom_offset(dmaList[0].end);
         u32 gfxSize = (gfxRomStart != 0xFFFFFFFF && gfxRomEnd != 0xFFFFFFFF) ? (gfxRomEnd - gfxRomStart) : 0;
@@ -1188,21 +1226,25 @@ void load_split_entity_data(Entity* entity, EntityBlueprint* entityData, s32 lis
                 totalLoaded = bEntityDataLoadedSize;
             }
 
-            if ((totalLoaded + ((dmaList[0].end - dmaList[0].start) >> 2)) > 0x5FFCU) {
+            if ((totalLoaded + DMA_SEGMENT_WORDS(dmaList[0])) > 0x5FFCU) {
                 get_entity_type(entity->listIndex);
                 PANIC();
             }
 
-            if ((totalLoaded + ((dmaList[1].end - dmaList[1].start) >> 2)) > 0x5FFCU) {
+            if ((totalLoaded + DMA_SEGMENT_WORDS(dmaList[1])) > 0x5FFCU) {
                 get_entity_type(entity->listIndex);
                 PANIC();
             }
 
-            dma2size_1 = dma_copy(dmaList[0].start, dmaList[0].end, dmaList[0].start + ((gEntityHeapBase - totalLoaded * 4 - (intptr_t)dmaList[0].end) >> 2) * 4) >> 2;
+            // Same address as the N64 expression (start + (base - loaded - end)), but written
+            // from the segment's real size so it does not depend on the bound symbols' spacing.
+            dma2size_1 = dma_copy(dmaList[0].start, dmaList[0].end,
+                                  (void*)(gEntityHeapBase - totalLoaded * 4 - DMA_SEGMENT_WORDS(dmaList[0]) * 4)) >> 2;
             entity->gfxBaseAddr = (void*)(gEntityHeapBase - totalLoaded * 4 - dma2size_1 * 4);
             totalLoaded += dma2size_1;
 
-            dma2size_2 = dma_copy(dmaList[1].start, dmaList[1].end, dmaList[1].start + ((gEntityHeapBase - totalLoaded * 4 - (intptr_t)dmaList[1].end) >> 2) * 4) >> 2;
+            dma2size_2 = dma_copy(dmaList[1].start, dmaList[1].end,
+                                  (void*)(gEntityHeapBase - totalLoaded * 4 - DMA_SEGMENT_WORDS(dmaList[1]) * 4)) >> 2;
             animBaseAddr = (void*)(gEntityHeapBase - totalLoaded * 4 - dma2size_2 * 4);
             totalLoaded += dma2size_2;
             get_entity_type(entity->listIndex);
@@ -1214,9 +1256,9 @@ void load_split_entity_data(Entity* entity, EntityBlueprint* entityData, s32 lis
             }
             swizzlePointers = true;
         } else {
-            u32 temp = (dmaList[0].end - dmaList[0].start) >> 2;
+            u32 temp = DMA_SEGMENT_WORDS(dmaList[0]);
             entity->gfxBaseAddr = (void*)(gEntityHeapBase - loadedStart * 4 - temp * 4);
-            temp = (dmaList[1].end - dmaList[1].start) >> 2;
+            temp = DMA_SEGMENT_WORDS(dmaList[1]);
             animBaseAddr = (void*)(gEntityHeapBase - loadedEnd * 4 - temp * 4);
             get_entity_type(entity->listIndex);
         }
@@ -1270,14 +1312,14 @@ void entity_free_static_data(EntityBlueprint* data) {
         if (bp == data) {
             if (bp->flags & ENTITY_FLAG_HAS_ANIMATED_MODEL) {
                 DmaEntry* dmaList = bp->dmaList;
-                size = ((dmaList[0].end - dmaList[0].start) >> 2);
-                size += ((dmaList[1].end - dmaList[1].start) >> 2);
+                size = DMA_SEGMENT_WORDS(dmaList[0]);
+                size += DMA_SEGMENT_WORDS(dmaList[1]);
                 if (!func_80111790(bp)) {
                     wEntityBlueprint[freeSlot - 1] = nullptr;
                     wEntityDataLoadedSize -= size;
                 }
             } else {
-                size = (bp->dma.end - bp->dma.start) >> 2;
+                size = DMA_SEGMENT_WORDS(bp->dma);
                 if (!func_80111790(bp)) {
                     wEntityBlueprint[freeSlot - 1] = nullptr;
                     wEntityDataLoadedSize -= size;

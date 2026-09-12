@@ -251,6 +251,35 @@ gate collider `mm1` is genuinely solid at that story state (only the
 by `kmr_02`'s own main script, and the odd floor fan of collider #61 (a
 repeated vertex and a downward sliver) is what the map data contains.
 
+### Seventh round: the entity heap was writing over the map's collision
+
+Comparing the two collider dumps against each map's own collider table (printed
+at load) showed both dumps listing exactly the colliders they should, minus a
+run of low-numbered ones: `#15 #16 #23 #25` missing in one, `#2 #6 #11 #20` in
+the other, with every higher-numbered collider in range present. Colliders are
+rejected on their bounding box before their triangles are tested, and those
+boxes are one block at the very start of the collision heap, so a stray write
+there makes the first colliders non-solid while leaving the rest of the map
+intact. That is the bug the device was reporting as doors you can walk through.
+
+The stray write is in the entity loader. `load_simple_entity_data` and
+`reload_world_entity_data` size an entity's ROM segment as
+`bp->dma.end - bp->dma.start` and place the data at
+`gEntityHeapBase - loaded - size`, i.e. just below the top of the world entity
+heap. The port links each ROM bound as its own 1-byte placeholder symbol, so
+that subtraction is 1, not the segment length: the size came out 0, the first
+entity of every map was written *at* `gEntityHeapBase`, and `dma_copy` then
+copied the real length (640 bytes for a hammer block) upward. `heap_collisionHead`
+begins 16 bytes past `WorldEntityHeapBase`, so the copy landed on the heap
+header and the first two dozen colliders' bounding boxes. Every map has
+entities, which is why every door behaved this way.
+
+`port_rom_segment_size()` now resolves both bounds through the ROM offset table
+and `src/entity.c` takes every segment size from it (the animated-entity path
+already did this, which is why only simple entities corrupted memory). A bounds
+check on the entity heap reports any write that leaves it, and the report's
+per-frame integrity check on the bounding boxes stays as a regression guard.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

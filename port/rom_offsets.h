@@ -27,6 +27,15 @@ extern "C" {
 u32 resolve_rom_offset(const void* stub_addr);
 
 /**
+ * Size in bytes of the ROM segment bounded by two stub symbols.
+ *
+ * The port links each bound as its own 1-byte placeholder, so subtracting the
+ * symbol addresses (what the N64 code does) does not give the segment length.
+ * Returns 0 when either bound is unknown.
+ */
+u32 port_rom_segment_size(const void* start_stub, const void* end_stub);
+
+/**
  * Check that every mapping resolves to its own offset (logs a summary line).
  * Returns the number of wrong resolutions; 0 means the stub symbols are unique.
  */

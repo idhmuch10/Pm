@@ -289,7 +289,7 @@ s32 check(const char* label, const char* what, bool ok, const char* detail) {
 // One window, drawn and inspected. `flags` is what draw_box() is given: a message box
 // already on screen is drawn as rectangles, one that is still opening goes through the
 // rotate/scale path, which sends the same window through the 3D pipeline instead.
-s32 run_case(const char* label, s32 flags, bool wrapFirst, s32 caseIndex) {
+s32 run_case(const char* label, s32 flags, bool wrapFirst, s32 caseIndex, bool assertResults) {
     Gfx* pos = gDisplayContext->mainGfx;
     gMatrixListPos = 0;
 
@@ -361,6 +361,24 @@ s32 run_case(const char* label, s32 flags, bool wrapFirst, s32 caseIndex) {
     char detail[224];
     s32 failures = 0;
 
+    if (!assertResults) {
+        // The game's own textures, whose contents are only known on a machine with the
+        // ROM. Report what they draw rather than judging it.
+        u8 middle[4], insideTop[4];
+        s32 left, top, right, bottom;
+        sample(frame, BOX_X + BOX_W / 2, BOX_Y + BOX_H / 2, middle);
+        sample(frame, BOX_X + BOX_W / 4, BOX_Y + 4, insideTop);
+        if (!measure_window(frame, &left, &top, &right, &bottom)) {
+            left = top = right = bottom = -1;
+        }
+        fprintf(stderr,
+                "[selftest] window render: %s the real window is %d%% opaque in the middle, %d%% under its top "
+                "edge, and covers %d,%d to %d,%d\n",
+                label, middle[1] * 100 / 255, insideTop[1] * 100 / 255, left, top, right, bottom);
+        free(frame.pixels);
+        return 0;
+    }
+
     u8 screenCorner[4][4];
     sample(frame, 2, 2, screenCorner[0]);
     sample(frame, SCREEN_WIDTH - 3, 2, screenCorner[1]);
@@ -426,15 +444,6 @@ extern "C" int port_window_selftest_run(void) {
     report_game_corner_alpha("message box corners", gBoxCorners[0]);
     report_game_corner_alpha("pause menu corners", gBoxCorners[3]);
 
-    // The test needs textures whose contents it knows, and the game is about to use the
-    // real ones, so borrow the arrays and put them back afterwards.
-    u8 savedBackground[8];
-    u8 savedCorners[4 * CORNER_SIZE * CORNER_SIZE];
-    memcpy(savedBackground, ui_box_bg_flat_png, sizeof(savedBackground));
-    memcpy(savedCorners, ui_box_corners1_png, sizeof(savedCorners));
-    memset(ui_box_bg_flat_png, 0xFF, sizeof(savedBackground)); // I4 16x1, every texel white
-    build_corner_texture();
-
     // draw_box() builds its display list at gMainGfxPos and the rotate/scale path also
     // pushes matrices, so give it the buffers a frame of the game itself would have.
     DisplayContext* savedContext = gDisplayContext;
@@ -442,10 +451,24 @@ extern "C" int port_window_selftest_run(void) {
     u16 savedMatrixPos = gMatrixListPos;
     gDisplayContext = &D_80164000[0];
 
+    // First the window the game will actually draw, with the textures it loaded from
+    // the ROM. Nothing here knows what those contain, so this only reports.
+    run_case("real:       ", 0, false, 3, false);
+
+    // Then the same window with textures whose contents are known. The game is about to
+    // use the real ones, so borrow the arrays and put them back afterwards.
+    u8 savedBackground[8];
+    u8 savedCorners[4 * CORNER_SIZE * CORNER_SIZE];
+    memcpy(savedBackground, ui_box_bg_flat_png, sizeof(savedBackground));
+    memcpy(savedCorners, ui_box_corners1_png, sizeof(savedCorners));
+    memset(ui_box_bg_flat_png, 0xFF, sizeof(savedBackground)); // I4 16x1, every texel white
+    build_corner_texture();
+    gfx_texture_cache_clear(); // the real textures are uploaded under these addresses
+
     s32 failures = 0;
-    failures += run_case("on screen:  ", 0, false, 0);
-    failures += run_case("opening:    ", DRAW_FLAG_ROTSCALE, false, 1);
-    failures += run_case("after wrap: ", 0, true, 2);
+    failures += run_case("on screen:  ", 0, false, 0, true);
+    failures += run_case("opening:    ", DRAW_FLAG_ROTSCALE, false, 1, true);
+    failures += run_case("after wrap: ", 0, true, 2, true);
 
     gDisplayContext = savedContext;
     gMainGfxPos = savedGfxPos;

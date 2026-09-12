@@ -233,7 +233,8 @@ cd build-gles && PAPERSHIP_SELFTEST=1 SDL_AUDIODRIVER=dummy \
 The same run is part of CI (`selftest-linux` job). Every normal boot also
 prints one `[rom_offsets]` summary line to the session log, and runs the window
 render test once, so a device's report says whether that device draws a window
-correctly and what opacity the game's own window textures ask for.
+correctly, how opaque the game's own window textures actually draw one, and the
+size the frame was rendered and presented at.
 
 `tools/port/collision_harness/run.sh` is a second ROM-free check aimed at the
 door/wall bug: it builds a synthetic hit file, loads it through the real

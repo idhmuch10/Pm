@@ -334,12 +334,14 @@ All of it is correct under GLES 3.2 on Mesa, both at 4:3 and at the phone's
 window shape (`Window.Width`/`Window.Height` in `papership.cfg.json`), so the
 display list `draw_box()` builds, the two-tile setup, the two-cycle combiner and
 the per-axis clamping are all right in this build. That leaves the texture data
-and the device's own driver, which the same test now separates: the game runs it
-once at startup, and prints the fill alpha the game's real corner textures ask
-for before borrowing the arrays. A device whose next report says the fill alpha
-is 15 and the test still fails is a driver problem; one that reports a lower
-number was always going to draw a partly transparent window, and the complaint
-is about something else in that frame.
+and the device's own driver, which the same test now separates. The game runs it
+once at startup. Before borrowing the texture arrays it draws the same window
+with the real ones and reports how opaque that came out, along with the fill
+alpha those textures ask for; then it runs the checks with its own textures. A
+device whose next report says the real window is opaque, or that the fill alpha
+is 15 while the checks fail, is a driver problem. One that reports a partly
+opaque window with a fill alpha to match was always going to draw it that way,
+and the complaint is about something else in that frame.
 
 Measuring the screenshot did find something else, which the test's own report of
 the frame geometry then confirmed: **the picture was stretched, not pillarboxed.**

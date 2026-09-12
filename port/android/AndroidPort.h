@@ -34,6 +34,9 @@ void port_android_merge_input(void* pads);
 /** Ask MainActivity to show the report dialog with the current session log (call on the game thread). */
 void port_android_request_report(void);
 
+/** Block (up to a second) until everything printed so far has reached the session log file. */
+void port_android_log_sync(void);
+
 /** Crash diagnostics: native backtrace and the most recent log lines (also sent to logcat). */
 void port_android_write_backtrace(void* file);
 void port_android_dump_recent_log(void* file);

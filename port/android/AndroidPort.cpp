@@ -23,6 +23,7 @@
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <mutex>
@@ -71,6 +72,11 @@ static std::mutex sRecentLogMutex;
 static std::deque<std::string> sRecentLog;
 static constexpr size_t kRecentLogLines = 250;
 
+// Handshake so a caller can wait until everything it printed has reached the log file:
+// the report dialog reads that file, and the pump thread below runs behind the writer.
+static std::atomic<unsigned long long> sLogSyncToken{0};
+static std::atomic<unsigned long long> sLogSyncSeen{0};
+
 static void RememberLogLine(const std::string& line) {
     std::lock_guard<std::mutex> lock(sRecentLogMutex);
     sRecentLog.push_back(line);
@@ -103,6 +109,9 @@ static void* LogcatPumpThread(void*) {
             if (buf[i] == '\n') {
                 __android_log_write(ANDROID_LOG_INFO, LOG_TAG, line.c_str());
                 RememberLogLine(line);
+                if (line.compare(0, 10, "[log-sync ") == 0) {
+                    sLogSyncSeen.store(strtoull(line.c_str() + 10, nullptr, 10));
+                }
                 line.clear();
             } else {
                 line.push_back(buf[i]);
@@ -410,6 +419,18 @@ extern "C" void port_android_merge_input(void* padsPtr) {
 // JNI entry points (com.papership.mobile.MainActivity)
 // ---------------------------------------------------------------------------
 extern "C" {
+
+void port_android_log_sync(void) {
+    if (sLogPipe[0] < 0) {
+        return;
+    }
+    unsigned long long token = ++sLogSyncToken;
+    fprintf(stderr, "[log-sync %llu]\n", token);
+    fflush(stderr);
+    for (int i = 0; i < 400 && sLogSyncSeen.load() < token; i++) {
+        usleep(2500); // at most one second
+    }
+}
 
 void port_android_request_report(void) {
     // SDL keeps a JNIEnv for the thread that runs SDL_main (the game thread).

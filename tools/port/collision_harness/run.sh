@@ -55,6 +55,11 @@ for attempt in 1 2 3 4; do
 done
 
 $RUN "$OUT/harness" > "$OUT/actual.txt" 2>&1
+if [ -n "$UPDATE_EXPECTED" ]; then
+  cp "$OUT/actual.txt" expected.txt
+  echo "collision harness ($MODE): expected.txt updated ($(wc -l < expected.txt) lines)"
+  exit 0
+fi
 if diff -u expected.txt "$OUT/actual.txt" > "$OUT/diff.txt"; then
   echo "collision harness ($MODE): output matches expected.txt"
 else

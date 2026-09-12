@@ -200,6 +200,35 @@ void port_testing_status_text(char* buf, size_t size) {
     (void)n;
 }
 
+/* The on-demand report is written to its own file as well as to the log. The log
+ * reaches the dialog through a pipe and a pump thread, so its final lines can still
+ * be in flight when Java reads the file; this copy is closed before the dialog opens. */
+static FILE* sReportFile = NULL;
+
+static void rp(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    if (sReportFile != NULL) {
+        va_start(ap, fmt);
+        vfprintf(sReportFile, fmt, ap);
+        va_end(ap);
+    }
+}
+
+/* Collider state as the map loaded it, so the report can show what changed since. */
+typedef struct ColliderSnapshot {
+    s32 flags;
+    s16 numTriangles;
+    s16 hasAabb;
+    f32 min[3];
+    f32 max[3];
+} ColliderSnapshot;
+
+static ColliderSnapshot sLoadState[512];
+static int sLoadStateCount = 0;
+
 static f32 aabb_distance_xz(ColliderBoundingBox* aabb, f32 x, f32 z) {
     f32 dx = 0.0f;
     f32 dz = 0.0f;
@@ -274,7 +303,7 @@ void port_testing_dump_models(void) {
     int i, printed = 0, total = 0, hidden = 0;
 
     if (gCurrentModels == NULL) {
-        fprintf(stderr, "[models] no model list\n");
+        rp("[models] no model list\n");
         return;
     }
     for (i = 0; i < MAX_MODELS; i++) {
@@ -297,13 +326,13 @@ void port_testing_dump_models(void) {
             continue;
         }
         printed++;
-        fprintf(stderr, "[models]  #%d %s id %d flags %04X fresh %d baked %d final %s center (%.0f %.0f %.0f) user T=(%.1f %.1f %.1f) diag=(%.2f %.2f %.2f) rot=(%.2f %.2f %.2f)\n",
+        rp("[models]  #%d %s id %d flags %04X fresh %d baked %d final %s center (%.0f %.0f %.0f) user T=(%.1f %.1f %.1f) diag=(%.2f %.2f %.2f) rot=(%.2f %.2f %.2f)\n",
                 i, model_name(m->modelID), m->modelID, m->flags, m->matrixFreshness, m->bakedMtx != NULL,
                 m->finalMtx == NULL ? "null" : (m->finalMtx == &m->savedMtx ? "saved" : "stack"),
                 m->center.x, m->center.y, m->center.z, u[3][0], u[3][1], u[3][2], u[0][0], u[1][1], u[2][2],
                 u[0][2], u[1][0], u[2][0]);
     }
-    fprintf(stderr, "[models] %d models, %d hidden, %d with a transform listed\n", total, hidden, printed);
+    rp("[models] %d models, %d hidden, %d with a transform listed\n", total, hidden, printed);
 }
 
 static f32 unit_xz(f32* dx, f32* dz) {
@@ -323,10 +352,10 @@ static void log_wall_ray(const char* label, f32 sx, f32 sy, f32 sz, f32 dx, f32 
     s32 hit = test_ray_colliders(COLLIDER_FLAG_IGNORE_PLAYER, sx, sy, sz, dx, 0.0f, dz, &hx, &hy, &hz, &d, &nx, &ny,
                                  &nz);
     if (hit >= 0) {
-        fprintf(stderr, "    %s: hit #%d (%s) at depth %.2f of %.2f, point (%.1f %.1f %.1f) n=(%.2f %.2f %.2f)\n",
+        rp("    %s: hit #%d (%s) at depth %.2f of %.2f, point (%.1f %.1f %.1f) n=(%.2f %.2f %.2f)\n",
                 label, hit, collider_name(hit), d, depth, hx, hy, hz, nx, ny, nz);
     } else {
-        fprintf(stderr, "    %s: no hit within %.2f (ret %d)\n", label, depth, hit);
+        rp("    %s: no hit within %.2f (ret %d)\n", label, depth, hit);
     }
 }
 
@@ -339,6 +368,22 @@ void port_testing_collision_selfcheck(void) {
     int floors = 0, floorHits = 0, floorOther = 0;
     int degenerate = 0, printed = 0;
     int i, t;
+
+    sLoadStateCount = cd->numColliders;
+    if (sLoadStateCount > (int)(sizeof(sLoadState) / sizeof(sLoadState[0]))) {
+        sLoadStateCount = (int)(sizeof(sLoadState) / sizeof(sLoadState[0]));
+    }
+    for (i = 0; i < sLoadStateCount; i++) {
+        Collider* c = &cd->colliderList[i];
+        ColliderSnapshot* snap = &sLoadState[i];
+        snap->flags = c->flags;
+        snap->numTriangles = c->numTriangles;
+        snap->hasAabb = (c->numTriangles != 0 && c->aabb != NULL);
+        if (snap->hasAabb) {
+            snap->min[0] = c->aabb->min.x; snap->min[1] = c->aabb->min.y; snap->min[2] = c->aabb->min.z;
+            snap->max[0] = c->aabb->max.x; snap->max[1] = c->aabb->max.y; snap->max[2] = c->aabb->max.z;
+        }
+    }
 
     for (i = 0; i < cd->numColliders; i++) {
         Collider* c = &cd->colliderList[i];
@@ -371,7 +416,7 @@ void port_testing_collision_selfcheck(void) {
                     wallOther++;
                 } else if (printed < 8) {
                     printed++;
-                    fprintf(stderr, "[collision] self-check MISS wall #%d (%s) tri%d centre (%.1f %.1f %.1f) n=(%.2f %.2f %.2f) oneSided=%d: ret %d\n",
+                    rp("[collision] self-check MISS wall #%d (%s) tri%d centre (%.1f %.1f %.1f) n=(%.2f %.2f %.2f) oneSided=%d: ret %d\n",
                             i, collider_name(i), t, cx, cy, cz, nx, ny, nz, tri->oneSided, hit);
                 }
             } else if (ny > 0.5f) {
@@ -384,13 +429,13 @@ void port_testing_collision_selfcheck(void) {
                     floorOther++;
                 } else if (printed < 8) {
                     printed++;
-                    fprintf(stderr, "[collision] self-check MISS floor #%d (%s) tri%d centre (%.1f %.1f %.1f) n=(%.2f %.2f %.2f) oneSided=%d: ret %d\n",
+                    rp("[collision] self-check MISS floor #%d (%s) tri%d centre (%.1f %.1f %.1f) n=(%.2f %.2f %.2f) oneSided=%d: ret %d\n",
                             i, collider_name(i), t, cx, cy, cz, nx, ny, nz, tri->oneSided, hit);
                 }
             }
         }
     }
-    fprintf(stderr, "[collision] self-check: walls %d hit / %d other / %d total, floors %d hit / %d other / %d total, degenerate %d\n",
+    rp("[collision] self-check: walls %d hit / %d other / %d total, floors %d hit / %d other / %d total, degenerate %d\n",
             wallHits, wallOther, walls, floorHits, floorOther, floors, degenerate);
 }
 
@@ -442,15 +487,21 @@ void port_testing_watch_player_walls(f32 prevX, f32 prevY, f32 prevZ) {
             f32 ax, ay, az, bx, by, bz, cx, cy, cz;
             f32 e0, e1, e2;
             int crossed;
+            int fromBehind = 0;
 
             if (fabsf(ny) >= 0.5f || (nx == 0.0f && ny == 0.0f && nz == 0.0f)) {
                 continue;
             }
             d0 = nx * (x0 - tri->v1->x) + ny * (y0 - tri->v1->y) + nz * (z0 - tri->v1->z);
             d1 = nx * (x1 - tri->v1->x) + ny * (y1 - tri->v1->y) + nz * (z1 - tri->v1->z);
-            crossed = (d0 >= 0.0f && d1 < 0.0f) || (!tri->oneSided && d0 <= 0.0f && d1 > 0.0f);
-            if (!crossed || d0 == d1) {
+            crossed = (d0 >= 0.0f && d1 < 0.0f) ? 1 : ((d0 <= 0.0f && d1 > 0.0f) ? 2 : 0);
+            if (crossed == 0 || d0 == d1) {
                 continue;
+            }
+            // Passing through the back of a one-sided wall is how the original game behaves,
+            // so say which case this is rather than reporting both as a collision failure.
+            if (crossed == 2 && tri->oneSided) {
+                fromBehind = 1;
             }
             k = d0 / (d0 - d1);
             px = x0 + mx * k; py = y0 + my * k; pz = z0 + mz * k;
@@ -473,16 +524,17 @@ void port_testing_watch_player_walls(f32 prevX, f32 prevY, f32 prevZ) {
             unit_xz(&cx, &cz);
             sLogged++;
             sCooldown = 30;
-            fprintf(stderr, "[collision] PLAYER CROSSED WALL #%d (%s) tri%d flags=%08X oneSided=%d n=(%.2f %.2f %.2f) at (%.1f %.1f %.1f)\n",
-                    i, collider_name(i), t, (unsigned)c->flags, tri->oneSided, nx, ny, nz, px, py, pz);
-            fprintf(stderr, "    move (%.2f %.2f %.2f) -> (%.2f %.2f %.2f) len %.2f, speed %.2f state %d flags %08X animFlags %08X\n",
+            rp("[collision] PLAYER CROSSED WALL #%d (%s) tri%d flags=%08X oneSided=%d%s n=(%.2f %.2f %.2f) at (%.1f %.1f %.1f)\n",
+                    i, collider_name(i), t, (unsigned)c->flags, tri->oneSided,
+                    fromBehind ? " FROM BEHIND (not solid from this side)" : "", nx, ny, nz, px, py, pz);
+            rp("    move (%.2f %.2f %.2f) -> (%.2f %.2f %.2f) len %.2f, speed %.2f state %d flags %08X animFlags %08X\n",
                     prevX, prevY, prevZ, ps->pos.x, ps->pos.y, ps->pos.z, moveLen, ps->curSpeed, ps->actionState,
                     (unsigned)ps->flags, (unsigned)ps->animFlags);
-            fprintf(stderr, "    yaw target %.1f cur %.1f heading %.1f facing %.1f cam %.1f; curWall %d pushing %d floor %d; overlaps nesting %d timeInAir %d pushVel (%.2f %.2f %.2f)\n",
+            rp("    yaw target %.1f cur %.1f heading %.1f facing %.1f cam %.1f; curWall %d pushing %d floor %d; overlaps nesting %d timeInAir %d pushVel (%.2f %.2f %.2f)\n",
                     ps->targetYaw, ps->curYaw, ps->heading, ps->spriteFacingAngle, gCameras[gCurrentCameraID].curYaw,
                     cs->curWall, cs->pushingAgainstWall, cs->curFloor, ps->enableCollisionOverlapsCheck, ps->timeInAir,
                     ps->pushVel.x, ps->pushVel.y, ps->pushVel.z);
-            fprintf(stderr, "    map %s entry %d story %d partner %d; collider aabb (%.0f %.0f %.0f)-(%.0f %.0f %.0f)\n",
+            rp("    map %s entry %d story %d partner %d; collider aabb (%.0f %.0f %.0f)-(%.0f %.0f %.0f)\n",
                     port_testing_current_map(), gGameStatusPtr->entryID, evt_get_variable(NULL, GB_StoryProgress),
                     gPlayerData.curPartner, c->aabb->min.x, c->aabb->min.y, c->aabb->min.z, c->aabb->max.x,
                     c->aabb->max.y, c->aabb->max.z);
@@ -495,13 +547,13 @@ void port_testing_watch_player_walls(f32 prevX, f32 prevY, f32 prevZ) {
                 f32 hx, hy, hz, hnx, hny, hnz;
                 f32 depth = moveLen + 13.0f;
                 s32 ent = test_ray_entities(x0, y0, z0, cx, 0.0f, cz, &hx, &hy, &hz, &depth, &hnx, &hny, &hnz);
-                fprintf(stderr, "    entity ray: %d, depth left %.2f\n", ent, depth);
+                rp("    entity ray: %d, depth left %.2f\n", ent, depth);
             }
             {
                 f32 x = prevX, y = prevY, z = prevZ;
                 f32 yaw = atan2(0.0f, 0.0f, mx, mz);
                 HitID hit = player_test_move_with_slipping(ps, &x, &y, &z, moveLen, yaw);
-                fprintf(stderr, "    player_test_move_with_slipping(len %.2f, yaw %.1f) from old pos: hit %d, new pos (%.2f %.2f)\n",
+                rp("    player_test_move_with_slipping(len %.2f, yaw %.1f) from old pos: hit %d, new pos (%.2f %.2f)\n",
                         moveLen, yaw, hit, x, z);
             }
             return;
@@ -521,11 +573,58 @@ void port_testing_dump_collision(void) {
     int printed = 0;
     int i;
 
-    fprintf(stderr, "[collision] dump around player (%.1f %.1f %.1f): %d colliders, ignore mask %08X\n", px, py, pz,
-            cd->numColliders, (unsigned)COLLIDER_FLAG_IGNORE_PLAYER);
-    fprintf(stderr, "  yaw target %.1f cur %.1f heading %.1f facing %.1f cam %.1f; overlaps nesting %d timeInAir %d\n",
-            ps->targetYaw, ps->curYaw, ps->heading, ps->spriteFacingAngle, gCameras[gCurrentCameraID].curYaw,
-            ps->enableCollisionOverlapsCheck, ps->timeInAir);
+    int near = 0;
+    int changed = 0;
+    char nearList[600];
+    int nearLen = 0;
+
+    rp("[collision] dump around player (%.1f %.1f %.1f): %d colliders, ignore mask %08X\n", px, py, pz,
+       cd->numColliders, (unsigned)COLLIDER_FLAG_IGNORE_PLAYER);
+    rp("  yaw target %.1f cur %.1f heading %.1f facing %.1f cam %.1f; overlaps nesting %d timeInAir %d\n",
+       ps->targetYaw, ps->curYaw, ps->heading, ps->spriteFacingAngle, gCameras[gCurrentCameraID].curYaw,
+       ps->enableCollisionOverlapsCheck, ps->timeInAir);
+
+    /* One line naming every collider within range, so a lost detail line is obvious. */
+    nearList[0] = '\0';
+    for (i = 0; i < cd->numColliders; i++) {
+        Collider* c = &cd->colliderList[i];
+        if (c->numTriangles == 0 || c->aabb == NULL || aabb_distance_xz(c->aabb, px, pz) > 120.0f) {
+            continue;
+        }
+        near++;
+        if (nearLen < (int)sizeof(nearList) - 24) {
+            nearLen += snprintf(nearList + nearLen, sizeof(nearList) - (size_t)nearLen, " #%d(%s)", i,
+                                collider_name(i));
+        }
+    }
+    rp("  within 120 units: %d colliders:%s\n", near, nearList);
+
+    /* Anything a script changed since the map loaded (flags, triangles, bounding box). */
+    for (i = 0; i < cd->numColliders && i < sLoadStateCount; i++) {
+        Collider* c = &cd->colliderList[i];
+        ColliderSnapshot* snap = &sLoadState[i];
+        int hasAabb = (c->numTriangles != 0 && c->aabb != NULL);
+        int moved = hasAabb && snap->hasAabb &&
+                    (c->aabb->min.x != snap->min[0] || c->aabb->min.y != snap->min[1] ||
+                     c->aabb->min.z != snap->min[2] || c->aabb->max.x != snap->max[0] ||
+                     c->aabb->max.y != snap->max[1] || c->aabb->max.z != snap->max[2]);
+        if (c->flags == snap->flags && c->numTriangles == snap->numTriangles && hasAabb == snap->hasAabb && !moved) {
+            continue;
+        }
+        changed++;
+        if (changed <= 24) {
+            rp("  changed since load: #%d %s flags %08X->%08X tris %d->%d aabb %d->%d", i, collider_name(i),
+               (unsigned)snap->flags, (unsigned)c->flags, snap->numTriangles, c->numTriangles, snap->hasAabb, hasAabb);
+            if (moved) {
+                rp(" box (%.0f %.0f %.0f)-(%.0f %.0f %.0f) -> (%.0f %.0f %.0f)-(%.0f %.0f %.0f)", snap->min[0],
+                   snap->min[1], snap->min[2], snap->max[0], snap->max[1], snap->max[2], c->aabb->min.x,
+                   c->aabb->min.y, c->aabb->min.z, c->aabb->max.x, c->aabb->max.y, c->aabb->max.z);
+            }
+            rp("\n");
+        }
+    }
+    rp("  %d colliders changed since the map loaded\n", changed);
+
     for (i = 0; i < cd->numColliders && printed < 16; i++) {
         Collider* c = &cd->colliderList[i];
         f32 d;
@@ -537,42 +636,42 @@ void port_testing_dump_collision(void) {
         if (d > 120.0f) {
             continue;
         }
-        fprintf(stderr, "  #%d %s flags=%08X tris=%d aabb=(%.0f %.0f %.0f)-(%.0f %.0f %.0f) dist=%.1f\n",
+        rp("  #%d %s flags=%08X tris=%d aabb=(%.0f %.0f %.0f)-(%.0f %.0f %.0f) dist=%.1f\n",
                 i, collider_name(i), (unsigned)c->flags, c->numTriangles,
                 c->aabb->min.x, c->aabb->min.y, c->aabb->min.z, c->aabb->max.x, c->aabb->max.y, c->aabb->max.z, d);
         for (t = 0; t < c->numTriangles && t < 12; t++) {
             ColliderTriangle* tri = &c->triangleTable[t];
-            fprintf(stderr, "     tri%d v1=(%.0f %.0f %.0f) v2=(%.0f %.0f %.0f) v3=(%.0f %.0f %.0f) n=(%.2f %.2f %.2f) oneSided=%d\n",
+            rp("     tri%d v1=(%.0f %.0f %.0f) v2=(%.0f %.0f %.0f) v3=(%.0f %.0f %.0f) n=(%.2f %.2f %.2f) oneSided=%d\n",
                     t, tri->v1->x, tri->v1->y, tri->v1->z, tri->v2->x, tri->v2->y, tri->v2->z, tri->v3->x, tri->v3->y,
                     tri->v3->z, tri->normal.x, tri->normal.y, tri->normal.z, tri->oneSided);
         }
         printed++;
     }
 
-    fprintf(stderr, "  entities:");
+    rp("  entities:");
     for (i = 0; i < MAX_ENTITIES; i++) {
         Entity* e = get_entity_by_index(i);
         if (e == NULL) {
             continue;
         }
-        fprintf(stderr, " [%d type %d flags %08X alpha %d pos (%.0f %.0f %.0f) size %.1f aabb (%d %d %d)]", i, e->type,
+        rp(" [%d type %d flags %08X alpha %d pos (%.0f %.0f %.0f) size %.1f aabb (%d %d %d)]", i, e->type,
                 (unsigned)e->flags, e->alpha, e->pos.x, e->pos.y, e->pos.z, e->effectiveSize, e->aabb.x, e->aabb.y,
                 e->aabb.z);
     }
-    fprintf(stderr, "\n  triggers:");
+    rp("\n  triggers:");
     if (gCurrentTriggerListPtr != NULL) {
         for (i = 0; i < MAX_TRIGGERS; i++) {
             Trigger* tr = (*gCurrentTriggerListPtr)[i];
             if (tr == NULL) {
                 continue;
             }
-            fprintf(stderr, " [%d flags %08X collider %ld prompt %d]", i, (unsigned)tr->flags,
+            rp(" [%d flags %08X collider %ld prompt %d]", i, (unsigned)tr->flags,
                     (long)tr->location.colliderID, tr->hasPlayerInteractPrompt);
         }
     }
-    fprintf(stderr, "\n");
+    rp("\n");
 
-    fprintf(stderr, "  wall probes from the player (26 units, +10 up), yaw:hit@depth:");
+    rp("  wall probes from the player (26 units, +10 up), yaw:hit@depth:");
     for (i = 0; i < 8; i++) {
         f32 yaw = (f32)(i * 45);
         f32 rad = yaw * 3.14159265f / 180.0f;
@@ -583,49 +682,57 @@ void port_testing_dump_collision(void) {
         s32 hit = test_ray_colliders(COLLIDER_FLAG_IGNORE_PLAYER, px, py + 10.01f, pz, dx, 0.0f, dz, &hx, &hy, &hz,
                                      &depth, &nx, &ny, &nz);
         if (hit >= 0) {
-            fprintf(stderr, " %d:%d(%s)@%.1f", (int)yaw, hit, collider_name(hit), depth);
+            rp(" %d:%d(%s)@%.1f", (int)yaw, hit, collider_name(hit), depth);
         } else {
-            fprintf(stderr, " %d:-", (int)yaw);
+            rp(" %d:-", (int)yaw);
         }
     }
-    fprintf(stderr, "\n  movement probes (player_test_move_with_slipping, 2 units), yaw:hit:");
+    rp("\n  movement probes (player_test_move_with_slipping, 2 units), yaw:hit:");
     if (get_game_mode() == GAME_MODE_WORLD) {
         for (i = 0; i < 8; i++) {
             f32 x = px, y = py, z = pz;
             HitID hit = player_test_move_with_slipping(ps, &x, &y, &z, 2.0f, (f32)(i * 45));
             if (hit >= 0) {
-                fprintf(stderr, " %d:%d(%s)", i * 45, hit, hit < cd->numColliders ? collider_name(hit) : "entity");
+                rp(" %d:%d(%s)", i * 45, hit, hit < cd->numColliders ? collider_name(hit) : "entity");
             } else {
-                fprintf(stderr, " %d:-", i * 45);
+                rp(" %d:-", i * 45);
             }
         }
     }
-    fprintf(stderr, "\n");
+    rp("\n  dump complete (%d of %d nearby colliders listed in full)\n", printed, near);
 }
 
 int port_testing_request_report(char* msg, size_t msgSize) {
     char status[1024];
+    char path[512];
+    const char* reportPath = port_get_data_path("papership_report.txt", path, sizeof(path));
 
-    // Put the live status into the log so it travels with the report.
+    if (reportPath != NULL) {
+        sReportFile = fopen(reportPath, "w");
+    }
+    // Put the live status into the log (and the report file) so it travels with the report.
     port_testing_status_text(status, sizeof(status));
-    fprintf(stderr, "[status] report requested\n%s", status);
+    rp("[status] report requested\n%s", status);
     if (get_game_mode() == GAME_MODE_WORLD) {
         port_testing_dump_collision();
         port_testing_dump_models();
     }
+    if (sReportFile != NULL) {
+        fflush(sReportFile);
+        fclose(sReportFile);
+        sReportFile = NULL;
+    }
     fflush(stdout);
     fflush(stderr);
 #ifdef __ANDROID__
+    // Let the pump thread write the log out before the dialog reads the file.
+    port_android_log_sync();
     port_android_request_report();
     snprintf(msg, msgSize, "Report dialog requested (close this menu if it is hidden behind it).");
     return 1;
 #else
-    {
-        char path[512];
-        const char* logPath = port_get_data_path("papership_log.txt", path, sizeof(path));
-        snprintf(msg, msgSize, "On desktop the log is stderr; data directory file would be %s.",
-                 logPath != NULL ? logPath : "(unknown)");
-    }
+    snprintf(msg, msgSize, "Wrote %s (on desktop the log itself is stderr).",
+             reportPath != NULL ? reportPath : "(unknown)");
     return 0;
 #endif
 }

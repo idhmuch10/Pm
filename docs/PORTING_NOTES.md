@@ -230,7 +230,22 @@ nearby colliders, the movement test in eight directions and every map model
 that carries a script transform (the revival scene hides Mario behind bushes
 that `TranslateModel` slides apart, and its "clipping" character is Goombaria
 walking through those bushes, so the model list is the data for that report).
-The harness runs in CI for both architectures. Findings this round that are not bugs: the
+The harness runs in CI for both architectures.
+
+A seventh report then showed why the earlier ones read as "no collider where the
+door is": the on-demand dump goes to stderr, which reaches the report dialog
+through a pipe, a pump thread and a log file, and the dialog can read that file
+while the last lines are still in flight. Comparing the dumps against the map's
+own collider table showed a contiguous run of colliders missing from the middle
+of each dump, and its tail cut off — lost lines, not missing colliders. The
+diagnostics now go straight to `papership_report.txt` from the game thread,
+closed before the dialog opens, and the dump states how many colliders are in
+range up front and how many it listed at the end, so a truncated report is
+obvious. `port_android_log_sync()` also waits for the pump thread to drain
+before the dialog reads the session log. Conclusions drawn from the earlier
+dumps are therefore void: the wall probes that "all missed" were correct (the
+nearest wall was 51 units away, the probes reach 26), and the door colliders
+were never shown to be absent. Findings this round that are not bugs: the
 gate collider `mm1` is genuinely solid at that story state (only the
 `EVS_ReturnToVillage`/gate-opening scripts clear it), `o757` is made passable
 by `kmr_02`'s own main script, and the odd floor fan of collider #61 (a

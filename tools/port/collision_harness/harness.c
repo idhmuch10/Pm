@@ -373,6 +373,12 @@ int main(void) {
     gPlayerStatus.colliderHeight = 37;
     gPlayerStatus.pos.x = -280; gPlayerStatus.pos.z = -28;
     port_testing_watch_player_walls(-250, 0, -28);
+    for (i = 0; i < 30; i++) {   // run out the watchdog's one-log-per-30-frames cooldown
+        port_testing_watch_player_walls(gPlayerStatus.pos.x, 0, gPlayerStatus.pos.z);
+    }
+    printf("watchdog: move through the gate from behind (one-sided, legal)\n");
+    gPlayerStatus.pos.x = -260; gPlayerStatus.pos.z = -28;
+    port_testing_watch_player_walls(-290, 0, -28);
     printf("watchdog: walk along the gate (no crossing expected)\n");
     gPlayerStatus.pos.x = -250; gPlayerStatus.pos.z = -40;
     port_testing_watch_player_walls(-250, 0, -28);

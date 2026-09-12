@@ -55,10 +55,23 @@ watchdog: move through the gate
     entity ray: -1, depth left 43.00
     angle filter: nAngleZ=180.0000 nAngleX=90.0000
     player_test_move_with_slipping(len 30.00, yaw 270.0) from old pos: hit 1, new pos (-260.00 -28.00)
+watchdog: move through the gate from behind (one-sided, legal)
+[collision] PLAYER CROSSED WALL #1 (?) tri1 flags=00000000 oneSided=1 FROM BEHIND (not solid from this side) n=(1.00 0.00 -0.00) at (-273.0 10.0 -28.0)
+    move (-290.00 0.00 -28.00) -> (-260.00 0.00 -28.00) len 30.00, speed 0.00 state 0 flags 00000000 animFlags 00000000
+    yaw target 0.0 cur 0.0 heading 0.0 facing 0.0 cam 0.0; curWall 0 pushing 0 floor 0; overlaps nesting 0 timeInAir 0 pushVel (0.00 0.00 0.00)
+    map ? entry 0 story 0 partner 0; collider aabb (-274 -1 -60)-(-272 101 4)
+    re-test from old pos, +10.01, len+13: no hit within 43.00 (ret -1)
+    re-test from old pos, +10.01, len 40: no hit within 40.00 (ret -1)
+    re-test from old pos, +0.1: no hit within 43.00 (ret -1)
+    re-test from old pos, +0.75*height: no hit within 43.00 (ret -1)
+    entity ray: -1, depth left 43.00
+    player_test_move_with_slipping(len 30.00, yaw 90.0) from old pos: hit -1, new pos (-260.00 -28.00)
 watchdog: walk along the gate (no crossing expected)
 dump:
 [collision] dump around player (-255.0 0.0 -28.0): 4 colliders, ignore mask 00010000
   yaw target 0.0 cur 0.0 heading 0.0 facing 0.0 cam 0.0; overlaps nesting 0 timeInAir 0
+  within 120 units: 2 colliders: #0(?) #1(?)
+  0 colliders changed since the map loaded
   #0 ? flags=00000000 tris=2 aabb=(-501 -1 -501)-(501 1 501) dist=0.0
      tri0 v1=(0 0 0) v2=(207 0 500) v3=(500 0 207) n=(-0.00 1.00 0.00) oneSided=1
      tri1 v1=(0 0 0) v2=(-500 0 -500) v3=(207 0 500) n=(0.00 1.00 0.00) oneSided=1
@@ -69,6 +82,7 @@ dump:
   triggers:
   wall probes from the player (26 units, +10 up), yaw:hit@depth: 0:- 45:- 90:- 135:- 180:- 225:1(?)@25.5 270:1(?)@18.0 315:1(?)@25.5
   movement probes (player_test_move_with_slipping, 2 units), yaw:hit: 0:- 45:- 90:- 135:- 180:- 225:- 270:- 315:-
+  dump complete (2 of 2 nearby colliders listed in full)
 walk west into the gate (player radius 13, 2 units per step):
   step  0: x=-232.0000 z=-27.9998 hit=-1
   step  1: x=-234.0000 z=-27.9996 hit=-1

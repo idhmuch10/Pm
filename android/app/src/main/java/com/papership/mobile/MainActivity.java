@@ -58,6 +58,9 @@ public class MainActivity extends SDLActivity {
     private static final String CRASH_LOG_NAME = "papership_crash.log";
     private static final String SESSION_LOG_NAME = "papership_log.txt";
     private static final String PREVIOUS_LOG_NAME = "papership_log_prev.txt";
+    /** Diagnostics the game writes directly when the Testing tab asks for a report. */
+    private static final String DIAGNOSTICS_NAME = "papership_report.txt";
+    private static final int REPORT_DIAGNOSTICS_LIMIT = 96 * 1024;
     private static final String CLEAN_SHUTDOWN_MARKER = "=== PaperShip clean shutdown ===";
     private static final int REPORT_LOG_TAIL = 160 * 1024;
     private static final int REPORT_CRASH_LIMIT = 64 * 1024;
@@ -232,6 +235,15 @@ public class MainActivity extends SDLActivity {
         if (crashLog.isFile()) {
             report.append("\n----- papership_crash.log -----\n");
             report.append(readTail(crashLog, REPORT_CRASH_LIMIT));
+        }
+        if (includeCurrentLog) {
+            // Written by the game thread and closed before this dialog opens, so unlike the
+            // session log it cannot be missing its last lines.
+            File diagnostics = new File(getGameDataDir(), DIAGNOSTICS_NAME);
+            if (diagnostics.isFile()) {
+                report.append("\n----- diagnostics -----\n");
+                report.append(readTail(diagnostics, REPORT_DIAGNOSTICS_LIMIT));
+            }
         }
         if (includeCurrentLog) {
             File current = new File(getGameDataDir(), SESSION_LOG_NAME);

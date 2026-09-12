@@ -114,7 +114,14 @@ The **Diagnostics** part of the same tab has two tools for reporting bugs that
 do not crash the game:
 
 * **Save report (current log) now** opens the same Copy / Save to Downloads /
-  Share dialog as after a crash, but with the log of the *running* session.
+  Share dialog as after a crash, with a **diagnostics** block followed by the log
+  of the *running* session. The diagnostics block is written straight to
+  `papership_report.txt` by the game thread and closed before the dialog opens;
+  the log itself travels through a pipe and a pump thread, so without that file
+  its last lines can still be in flight when the dialog reads it (an earlier
+  report lost the first third of a collider dump this way). The dump also names
+  every nearby collider on one line and ends with a `dump complete (N of M)`
+  line, so a lost line is visible rather than looking like missing collision.
   Open the menu right after the problem happened (during a cutscene is fine)
   and save or share the report. The report also carries the live status block
   and, in the world, a dump of the colliders around Mario (names, flags,
@@ -139,7 +146,9 @@ Two collision checks also run on their own and only need the log:
   works on this device for this map's data, and a `MISS` line names a
   triangle it does not;
 * whenever Mario's movement in one frame passes through a solid wall triangle
-  the port logs `[collision] PLAYER CROSSED WALL #id (name)` with the move,
+  the port logs `[collision] PLAYER CROSSED WALL #id (name)` (or, when the wall
+  is one-sided and he came through its back, `FROM BEHIND (not solid from this
+  side)`, which is how the original game behaves) with the move,
   the player state and yaw values, and then repeats the wall ray from the
   previous position at the three heights the game uses, the entity ray and
   the movement test. Walk into a door and save a report: those lines say

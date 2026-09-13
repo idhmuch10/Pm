@@ -399,6 +399,39 @@ itself, so it still answers no. `load_partner_actor()` prints the party at the s
 every battle and the missing-speaker line in the overworld names it too, so the next
 report says whether the partner was lost or was never there.
 
+### Drawing the 30 fps game at 60
+
+Paper Mario's logic is locked to 30 fps and counts frames for everything -- animation
+timers, physics, script waits -- so running it faster would play the game faster. The
+only way to a smoother picture is to draw the frames in between.
+
+The renderer was already built for that: `Interpreter::Run()` takes a set of matrices to
+substitute for the ones the display list names, and `ProcessGfxCommands()` already asked
+for one set per frame it draws. What was missing was the matrices, which
+`port/frame_interpolation.c` now works out. Everything that moves is positioned by a
+matrix the game writes into the frame's display context, including every sprite
+(`sprite.c` pushes one per sprite) and the camera; the game alternates between two
+display contexts, so last frame's value of a matrix is the same slot in the other one.
+
+Pairing by slot is only right while the frame draws the same things in the same order.
+As soon as the number of things changes, a slot holds something else, and interpolating
+would stretch one object across the screen towards another for half a frame. Pairs
+further apart than an object could travel in a thirtieth of a second, or whose rotation
+or scale changed by more than half -- a sprite turning to face the other way -- are left
+alone, which draws them where they are, exactly as a 30 fps frame would have. A camera
+cut fails that test for everything at once, which is what should happen.
+
+The frames are spaced out by the window backend, which holds each present to the frame
+rate `SetTargetFps()` was given, so the two passes of a 60 fps frame land a sixtieth of
+a second apart and `push_frame()`'s limiter finds the game frame already spent. The cost
+is a second pass over the scene, so the Graphics tab can put it back to 30.
+
+`port_frame_interpolation_selftest()` covers the part that is hard to see: two frames
+built by hand with one thing that walked, one slot that came to hold something else, one
+that turned around and one that stood still. The `[FPS]` line says what the picture is
+being drawn at and how many matrices the last frame carried between game frames, so a
+device report says whether any of it is happening.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

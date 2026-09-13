@@ -58,6 +58,25 @@ void port_testing_watch_player_walls(float prevX, float prevY, float prevZ);
  * Returns non-zero when a dialog was requested; msg receives a status line either way. */
 int port_testing_request_report(char* msg, size_t msgSize);
 
+
+/* Party and badges: put a partner or a badge in the save without playing to the point
+ * where the game would have given it, so a test can start from the state that matters. */
+int port_testing_partner_count(void);
+const char* port_testing_partner_name(int partnerID);
+int port_testing_partner_in_party(int partnerID);
+int port_testing_current_partner(void);
+void port_testing_set_partner_in_party(int partnerID, int inParty);
+/* Brings the partner out, which is what creates the world NPC. PARTNER_NONE (0) puts
+ * the current one away. */
+void port_testing_set_current_partner(int partnerID);
+
+int port_testing_badge_count(void);
+int port_testing_badges_held(void);
+int port_testing_grant_all_badges(char* msg, size_t msgSize);
+int port_testing_clear_badges(char* msg, size_t msgSize);
+int port_testing_badge_points(void);
+void port_testing_set_badge_points(int bp);
+
 #ifdef __cplusplus
 }
 #endif

@@ -86,16 +86,25 @@ adb push "Paper Mario (USA).z64" "/sdcard/Android/data/com.papership.mobile/file
 
 * The touch overlay can be hidden with the **PAD** pill; the preference is remembered.
   It is hidden by default when a gamepad is connected at launch.
-* **MENU** (or the back button/gesture) opens PaperShip's settings: internal
-  resolution, MSAA, texture filtering, volume and the libultraship controller
-  mapping editor. While the menu is open the overlay disappears and touches go
-  to the menu.
+* **MENU** (or the back button/gesture) opens PaperShip's settings: frame rate,
+  internal resolution, MSAA, texture filtering, volume and the libultraship
+  controller mapping editor. While the menu is open the overlay disappears and
+  touches go to the menu.
+* **Frame rate** (Graphics tab) is 60 by default. The game itself always runs at
+  30 -- everything about it counts frames -- so 60 draws a frame in between by
+  moving everything part of the way there, which costs a second pass over the
+  scene. Drop it to 30 on a phone that cannot spare that.
 * Gamepads use SDL's game controller mappings (`gamecontrollerdb.txt`).
 
 ## Testing shortcuts
 
 The settings menu (MENU pill or back button) has a **Testing** tab:
 
+* **Party and badges**: tick a partner to put them in the party and press their
+  name to bring them out (which is what creates their NPC, so it works in the
+  middle of a map), give or take back every badge, and set the badge points.
+  Reaching a bug often means replaying to wherever the game would have handed
+  you the partner or badge that causes it; this puts it in the save instead.
 * **Quick save / Quick load**: writes the active save slot with the current
   position anywhere in a map (not only at save blocks) and re-enters the world
   from it, the same way the file menu does. Use it right before a scene you want
@@ -212,6 +221,12 @@ the game, and needs no ROM:
   shader id in a device log can be traced back to the drawing that asked for it.
   On a `-DUSE_OPENGLES=ON` Linux build this exercises the same GLSL ES 3.00
   shader path as Android;
+* `port/frame_interpolation.c` checks which pairs of matrices it takes for the
+  same object a frame apart, on two frames built by hand: one thing that walked,
+  one slot that came to hold something else, one that turned to face the other
+  way and one that did not move. Getting that wrong is not a crash but one
+  object stretched across the screen for half a frame, which is hard to catch by
+  looking;
 * `port/WindowRenderSelfTest.cpp` draws a game window with `draw_box()` over a
   solid background and reads the pixels back, checking that its fill is opaque,
   that both axes of the corner tile clamp, that the corners stay rounded and

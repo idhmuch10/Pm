@@ -1,5 +1,6 @@
 #include "PaperShipMenu.h"
 #include "cvar_prefixes.h"
+#include "Engine.h"
 
 #include <libultraship/bridge/consolevariablebridge.h>
 #include <ship/Context.h>
@@ -23,6 +24,7 @@
 #define PS_CVAR_MSAA               CVAR_SETTING("MSAAValue")
 #define PS_CVAR_VSYNC              CVAR_SETTING("VsyncEnabled")
 #define PS_CVAR_TEXTURE_FILTER     CVAR_SETTING("TextureFilter")
+#define PS_CVAR_INTERPOLATION_FPS  CVAR_SETTING("InterpolationFPS")
 
 static const char* sTextureFilterNames[] = { "Nearest", "Linear", "Three-Point" };
 static bool sIsFakeFullscreen = false;
@@ -198,6 +200,50 @@ static void DrawTestingTab() {
     ImGui::EndDisabled();
 
     ImGui::Separator();
+    ImGui::Text("Party");
+    ImGui::TextWrapped("Tick a partner to put them in the party; pick one to bring out. "
+                       "Battles from Goomba Village onwards expect somebody to be out.");
+    const int partnerCount = port_testing_partner_count();
+    const int curPartner = port_testing_current_partner();
+    for (int p = 1; p < partnerCount; p++) {
+        ImGui::PushID(p);
+        bool inParty = port_testing_partner_in_party(p) != 0;
+        if (ImGui::Checkbox("##inparty", &inParty)) {
+            port_testing_set_partner_in_party(p, inParty ? 1 : 0);
+            snprintf(sTestingStatus, sizeof(sTestingStatus), "%s %s the party.", port_testing_partner_name(p),
+                     inParty ? "joined" : "left");
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!inParty || p == curPartner);
+        if (ImGui::Button(port_testing_partner_name(p), ImVec2(-1, 0))) {
+            port_testing_set_current_partner(p);
+            snprintf(sTestingStatus, sizeof(sTestingStatus), "%s is out.", port_testing_partner_name(p));
+        }
+        ImGui::EndDisabled();
+        ImGui::PopID();
+    }
+    ImGui::Text("Out now: %s", port_testing_partner_name(curPartner));
+    ImGui::BeginDisabled(curPartner == 0);
+    if (ImGui::Button("Put the partner away", ImVec2(-1, 0))) {
+        port_testing_set_current_partner(0);
+        snprintf(sTestingStatus, sizeof(sTestingStatus), "Nobody is out.");
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Separator();
+    ImGui::Text("Badges: holding %d of %d in the game", port_testing_badges_held(), port_testing_badge_count());
+    if (ImGui::Button("Give every badge", ImVec2(-1, 0))) {
+        port_testing_grant_all_badges(sTestingStatus, sizeof(sTestingStatus));
+    }
+    if (ImGui::Button("Take them all back", ImVec2(-1, 0))) {
+        port_testing_clear_badges(sTestingStatus, sizeof(sTestingStatus));
+    }
+    int badgePoints = port_testing_badge_points();
+    if (ImGui::SliderInt("Badge points", &badgePoints, 3, 99)) {
+        port_testing_set_badge_points(badgePoints);
+    }
+
+    ImGui::Separator();
     ImGui::Text("Story progress (GB_StoryProgress)");
     if (!sStoryEditInit && inWorld) {
         sStoryEdit = port_testing_story_progress();
@@ -243,6 +289,32 @@ void PaperShipMenu::DrawElement() {
                 CVarSetInteger(PS_CVAR_VSYNC, vsync ? 1 : 0);
                 CVarSave();
             }
+
+            // Frame rate. The game itself always runs at 30; above that, the frames in
+            // between are drawn by moving everything part of the way, so what changes is
+            // how smooth it looks rather than how fast it plays.
+            ImGui::Spacing();
+            static const int fpsOptions[] = { 30, 60 };
+            static const char* fpsLabels[] = { "30 fps", "60 fps (interpolated)" };
+            int curFps = CVarGetInteger(PS_CVAR_INTERPOLATION_FPS, PM64_DEFAULT_DISPLAY_FPS);
+            for (int i = 0; i < 2; i++) {
+                bool selected = curFps == fpsOptions[i];
+                if (selected) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+                }
+                if (ImGui::Button(fpsLabels[i], ImVec2(170, 0))) {
+                    CVarSetInteger(PS_CVAR_INTERPOLATION_FPS, fpsOptions[i]);
+                    CVarSave();
+                }
+                if (selected) {
+                    ImGui::PopStyleColor();
+                }
+                if (i == 0) {
+                    ImGui::SameLine();
+                }
+            }
+            ImGui::TextWrapped("The game runs at 30 either way. 60 draws a frame in between, which costs a "
+                               "second pass over the scene.");
 
             ImGui::Separator();
             ImGui::Text("Internal Resolution");

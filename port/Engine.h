@@ -25,6 +25,10 @@
 // Audio produces 32000 samples/sec. At 30fps game loop, each call must produce ~1067 samples.
 // Use AUDIO_SAMPLES (184) aligned values to avoid buffer overflows in alAudioFrame.
 #define PM64_GAME_FPS 30
+// What the picture is drawn at by default. The game itself always runs at PM64_GAME_FPS;
+// above it, the frames in between are drawn by moving everything part of the way there
+// (port/frame_interpolation.c), which costs a second pass over the scene.
+#define PM64_DEFAULT_DISPLAY_FPS 60
 #define SAMPLES_HIGH 1104  // 6 * 184 — 1104 * 30fps = 33120/sec (adaptive drains excess)
 #define SAMPLES_LOW 920    // 5 * 184 — 920 * 30fps = 27600/sec (adaptive fills deficit)
 #define AUDIO_FRAMES_PER_UPDATE 2

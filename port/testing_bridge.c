@@ -812,3 +812,160 @@ int port_testing_request_report(char* msg, size_t msgSize) {
     return 0;
 #endif
 }
+
+// ---------------------------------------------------------------------------
+// Party and badges
+//
+// Reaching a bug often means replaying to the point where the game would have
+// given you the partner or the badge that triggers it. These put them in the
+// save directly, through the same calls the game uses, so a test can start from
+// the state that matters.
+// ---------------------------------------------------------------------------
+
+// Indexed by PARTNER_* (0 is PARTNER_NONE, the party with nobody out).
+static const char* sPartnerNames[] = {
+    "None", "Goombario", "Kooper", "Bombette", "Parakarry", "Goompa",
+    "Watt", "Sushie", "Lakilester", "Bow",     "Goombaria",  "Twink",
+};
+
+int port_testing_partner_count(void) {
+    return ARRAY_COUNT(sPartnerNames);
+}
+
+const char* port_testing_partner_name(int partnerID) {
+    if (partnerID < 0 || partnerID >= (int)ARRAY_COUNT(sPartnerNames)) {
+        return "?";
+    }
+    return sPartnerNames[partnerID];
+}
+
+int port_testing_partner_in_party(int partnerID) {
+    if (partnerID <= PARTNER_NONE || partnerID >= (int)ARRAY_COUNT(gPlayerData.partners)) {
+        return 0;
+    }
+    return gPlayerData.partners[partnerID].enabled;
+}
+
+int port_testing_current_partner(void) {
+    return gPlayerData.curPartner;
+}
+
+void port_testing_set_partner_in_party(int partnerID, int inParty) {
+    if (partnerID <= PARTNER_NONE || partnerID >= (int)ARRAY_COUNT(gPlayerData.partners)) {
+        return;
+    }
+    gPlayerData.partners[partnerID].enabled = inParty != 0;
+    // The one who is out has to be in the party; if this is the one being removed,
+    // put whoever is left out instead, and nobody if the party is now empty.
+    if (!inParty && gPlayerData.curPartner == partnerID) {
+        s32 i;
+        s32 replacement = PARTNER_NONE;
+
+        for (i = 1; i < (s32)ARRAY_COUNT(gPlayerData.partners); i++) {
+            if (gPlayerData.partners[i].enabled) {
+                replacement = i;
+                break;
+            }
+        }
+        port_testing_set_current_partner(replacement);
+    }
+}
+
+void port_testing_set_current_partner(int partnerID) {
+    if (partnerID < 0 || partnerID >= (int)ARRAY_COUNT(gPlayerData.partners)) {
+        return;
+    }
+    if (partnerID != PARTNER_NONE) {
+        gPlayerData.partners[partnerID].enabled = TRUE;
+    }
+    if (get_game_mode() == GAME_MODE_WORLD) {
+        // Takes the old partner away and brings the new one out, which is what
+        // creates the NPC; setting curPartner alone would leave the world without one.
+        switch_to_partner(partnerID);
+    } else {
+        gPlayerData.curPartner = partnerID;
+    }
+}
+
+int port_testing_badge_count(void) {
+    return ITEM_LAST_BADGE - ITEM_FIRST_BADGE + 1;
+}
+
+int port_testing_badges_held(void) {
+    s32 held = 0;
+    s32 i;
+
+    for (i = 0; i < (s32)ARRAY_COUNT(gPlayerData.badges); i++) {
+        if (gPlayerData.badges[i] != ITEM_NONE) {
+            held++;
+        }
+    }
+    return held;
+}
+
+int port_testing_grant_all_badges(char* msg, size_t msgSize) {
+    s32 granted = 0;
+    s32 skipped = 0;
+    s32 itemID;
+
+    for (itemID = ITEM_FIRST_BADGE; itemID <= ITEM_LAST_BADGE; itemID++) {
+        s32 i;
+        s32 alreadyHave = FALSE;
+
+        if (!(gItemTable[itemID].typeFlags & ITEM_TYPE_FLAG_BADGE)) {
+            continue; // a gap in the badge range
+        }
+        for (i = 0; i < (s32)ARRAY_COUNT(gPlayerData.badges); i++) {
+            if (gPlayerData.badges[i] == itemID) {
+                alreadyHave = TRUE;
+                break;
+            }
+        }
+        if (alreadyHave) {
+            continue;
+        }
+        // add_badge() returns the slot it used, and 0 is a real slot, so the only
+        // failure it can report is a full list.
+        if (port_testing_badges_held() >= (s32)ARRAY_COUNT(gPlayerData.badges)) {
+            skipped++;
+            continue;
+        }
+        add_badge(itemID);
+        granted++;
+    }
+    snprintf(msg, msgSize, "Added %d badge(s)%s. Holding %d of %d.", granted,
+             skipped != 0 ? " until the list filled up" : "", port_testing_badges_held(),
+             (int)ARRAY_COUNT(gPlayerData.badges));
+    return granted;
+}
+
+int port_testing_clear_badges(char* msg, size_t msgSize) {
+    s32 removed = 0;
+    s32 i;
+
+    for (i = 0; i < (s32)ARRAY_COUNT(gPlayerData.badges); i++) {
+        if (gPlayerData.badges[i] != ITEM_NONE) {
+            gPlayerData.badges[i] = ITEM_NONE;
+            removed++;
+        }
+    }
+    for (i = 0; i < (s32)ARRAY_COUNT(gPlayerData.equippedBadges); i++) {
+        gPlayerData.equippedBadges[i] = ITEM_NONE;
+    }
+    snprintf(msg, msgSize, "Removed %d badge(s) and unequipped them all.", removed);
+    return removed;
+}
+
+int port_testing_badge_points(void) {
+    return gPlayerData.maxBP;
+}
+
+void port_testing_set_badge_points(int bp) {
+    if (bp < 3) {
+        bp = 3;
+    }
+    if (bp > 99) {
+        bp = 99;
+    }
+    gPlayerData.maxBP = bp;
+}

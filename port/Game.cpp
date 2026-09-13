@@ -15,6 +15,7 @@
 #include <signal.h>
 #include <chrono>
 #include <thread>
+#include "frame_interpolation.h"
 #ifdef __APPLE__
 #include <execinfo.h>
 #endif
@@ -44,6 +45,7 @@ void gfx_task_background(void);
 // PORT: UI texture loader
 void port_load_ui_textures(void);
 extern "C" int port_window_selftest_run(void); // port/WindowRenderSelfTest.cpp
+extern "C" int port_frame_interpolation_selftest(void); // port/frame_interpolation.c
 void port_load_map_textures(void);
 
 // Game mode
@@ -166,7 +168,10 @@ void push_frame() {
         if (fpsFrameCount >= 300) {
             auto fpsNow = std::chrono::high_resolution_clock::now();
             double elapsed_s = std::chrono::duration<double>(fpsNow - fpsStart).count();
-            fprintf(stderr, "[FPS] %d frames in %.2fs = %.1f fps\n", fpsFrameCount, elapsed_s, fpsFrameCount / elapsed_s);
+            fprintf(stderr, "[FPS] %d game frames in %.2fs = %.1f fps, drawn at %d fps (%d matrices carried "
+                            "between frames)\n",
+                    fpsFrameCount, elapsed_s, fpsFrameCount / elapsed_s, GameEngine::GetInterpolationFPS(),
+                    port_frame_interpolation_last_count());
             fpsStart = fpsNow;
             fpsFrameCount = 0;
         }
@@ -345,6 +350,7 @@ int main(int argc, char* argv[]) {
             int failures = rom_offsets_selfcheck(1);
             failures += port_shader_selftest_run();
             failures += port_window_selftest_run();
+            failures += port_frame_interpolation_selftest();
             fprintf(stderr, "[selftest] %s (%d failure(s))\n", failures == 0 ? "PASSED" : "FAILED", failures);
             GameEngine::Instance->Destroy();
             return failures == 0 ? 0 : 1;

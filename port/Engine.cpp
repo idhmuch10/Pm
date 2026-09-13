@@ -1,5 +1,6 @@
 #include "Engine.h"
 #include "build.h"
+#include "frame_interpolation.h"
 #include "cvar_prefixes.h"
 #include <libultraship/bridge/consolevariablebridge.h>
 #include <libultraship/bridge/audiobridge.h>
@@ -60,10 +61,21 @@ typedef struct {
 GameEngine* GameEngine::Instance;
 AudioState GameEngine::audio;
 
-// Stub for frame interpolation — Paper Mario interpolation not yet implemented.
-// Returns an empty matrix replacement map (no interpolation applied).
-static std::unordered_map<Mtx*, MtxF> FrameInterpolation_Interpolate(float /*step*/) {
-    return {};
+// The matrices for a frame drawn part-way between the last game frame and this one.
+// port/frame_interpolation.c works out which of the frame's matrices moved in a way
+// worth drawing in between; the rest are left as the display list has them.
+static std::unordered_map<Mtx*, MtxF> FrameInterpolation_Interpolate(float step) {
+    static std::vector<PortMtxLerp> lerped(port_frame_interpolation_max());
+    std::unordered_map<Mtx*, MtxF> replacements;
+
+    int count = port_frame_interpolation_build(step, lerped.data(), (int)lerped.size());
+    replacements.reserve(count);
+    for (int i = 0; i < count; i++) {
+        MtxF value;
+        memcpy(value.mf, lerped[i].m, sizeof(value.mf));
+        replacements.emplace((Mtx*)lerped[i].addr, value);
+    }
+    return replacements;
 }
 
 // Create LUS::ControlDeck with keyboard and gamepad mappings for Paper Mario 64.
@@ -337,14 +349,22 @@ void GameEngine::StartFrame() const {
 }
 
 uint32_t GameEngine::GetInterpolationFPS() {
+    uint32_t fps;
+
     if (CVarGetInteger(CVAR_SETTING("MatchRefreshRate"), 0)) {
-        return Ship::Context::GetInstance()->GetWindow()->GetCurrentRefreshRate();
+        fps = Ship::Context::GetInstance()->GetWindow()->GetCurrentRefreshRate();
     } else if (CVarGetInteger(CVAR_VSYNC_ENABLED, 1) ||
                !Ship::Context::GetInstance()->GetWindow()->CanDisableVerticalSync()) {
-        return std::min<uint32_t>(Ship::Context::GetInstance()->GetWindow()->GetCurrentRefreshRate(),
-                                  CVarGetInteger(CVAR_SETTING("InterpolationFPS"), PM64_GAME_FPS));
+        fps = std::min<uint32_t>(Ship::Context::GetInstance()->GetWindow()->GetCurrentRefreshRate(),
+                                 CVarGetInteger(CVAR_SETTING("InterpolationFPS"), PM64_DEFAULT_DISPLAY_FPS));
+    } else {
+        fps = CVarGetInteger(CVAR_SETTING("InterpolationFPS"), PM64_DEFAULT_DISPLAY_FPS);
     }
-    return CVarGetInteger(CVAR_SETTING("InterpolationFPS"), PM64_GAME_FPS);
+    // The picture cannot be drawn slower than the game runs: ProcessGfxCommands works
+    // out how many times to draw a game frame from this, and anything below the game's
+    // own rate draws it no times at all. A display whose refresh rate cannot be read
+    // would otherwise take the screen black.
+    return std::max<uint32_t>(fps, PM64_GAME_FPS);
 }
 
 // Audio
@@ -475,11 +495,18 @@ void GameEngine::RunCommands(Gfx* Commands, const std::vector<std::unordered_map
     auto interpreter = wnd->GetInterpreterWeak().lock().get();
     wnd->HandleEvents();
 
+    // One pass per frame the game frame is drawn as: the interpolated ones first, then
+    // the frame itself. They are spaced out for us -- the window backend holds each
+    // present to the target frame rate SetTargetFps() was given above -- so the two
+    // passes of a 60 fps frame land a sixtieth of a second apart and push_frame()'s
+    // limiter finds the game frame already spent.
     interpreter->mInterpolationIndex = 0;
     for (const auto& mtxStack : mtx_replacements) {
         wnd->DrawAndRunGraphicsCommands(Commands, mtxStack);
         interpreter->mInterpolationIndex++;
     }
+    // This frame is the one the next frame is drawn from.
+    port_frame_interpolation_record();
 
     bool curAltAssets = CVarGetInteger("gEnhancements.Mods.AlternateAssets", 1);
     if (prevAltAssets != curAltAssets) {

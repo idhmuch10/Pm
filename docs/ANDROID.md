@@ -105,6 +105,9 @@ The settings menu (MENU pill or back button) has a **Testing** tab:
   middle of a map), give or take back every badge, and set the badge points.
   Reaching a bug often means replaying to wherever the game would have handed
   you the partner or badge that causes it; this puts it in the save instead.
+  Worth doing after any warp past the start of the game: a new file has no
+  partner until Goompa joins in `kmr_03`, and battle scripts from there on name
+  the partner without checking there is one.
 * **Quick save / Quick load**: writes the active save slot with the current
   position anywhere in a map (not only at save blocks) and re-enters the world
   from it, the same way the file menu does. Use it right before a scene you want

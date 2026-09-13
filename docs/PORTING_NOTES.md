@@ -399,6 +399,22 @@ itself, so it still answers no. `load_partner_actor()` prints the party at the s
 every battle and the missing-speaker line in the overworld names it too, so the next
 report says whether the partner was lost or was never there.
 
+Reading where the game hands out its first partner answered that without waiting for a
+device. A new file starts at `AREA_KMR` map `0xB` (`state_title_screen.c`), which is
+`kmr_20`, Mario's House -- exactly the "area 0, map index 11" the report gave -- and the
+intro clears every `partners[i].enabled` and sets `curPartner` to `PARTNER_NONE`
+(`state_intro.c`). The first partner is Goompa, handed over by
+`ChangeNpcToPartner(NPC_Goompa, PARTNER_GOOMPA)` in `kmr_03` along with
+`STORY_CH0_GOOMPA_JOINED_PARTY`; `kmr_02` later swaps him for Goombario. So a fresh file
+that has not played those cutscenes has no partner because it was never given one, not
+because the port lost one, and the save and its 64-bit layout are not involved.
+
+What is the port's doing is that the state is reachable at all: the Testing tab can warp
+to any map, and every battle past `kmr_03` is written for a party that has a partner. The
+scratch actor is what keeps that from being a crash, so it stays. The battle line now
+prints the story progress alongside the party, which is what says how far the file
+actually is, and the Testing tab can hand over a partner from wherever you warped to.
+
 ### Drawing the 30 fps game at 60
 
 Paper Mario's logic is locked to 30 fps and counts frames for everything -- animation

@@ -1519,7 +1519,8 @@ void load_partner_actor(void) {
     // One line per battle saying who is in the party. Battle scripts name the partner
     // without checking there is one, so a party that has lost its partner shows up as a
     // crash in whatever the fight does first; this says so before that happens.
-    fprintf(stderr, "[battle] party: partner %d, available", currentPartner);
+    fprintf(stderr, "[battle] party: partner %d, story %d, available", currentPartner,
+            evt_get_variable(nullptr, GB_StoryProgress));
     for (i = 0; i < (s32)ARRAY_COUNT(playerData->partners); i++) {
         if (playerData->partners[i].enabled) {
             fprintf(stderr, " %d", i);

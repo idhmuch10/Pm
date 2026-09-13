@@ -98,7 +98,8 @@ s32 _show_message(Evt* script, s32 isInitialCall, s32 mode) {
             speakerNpc = resolve_npc(script, speakerNpcID);
 #ifdef PORT
             if (speakerNpc == NULL) {
-                fprintf(stderr, "[_show_message] resolve_npc(%d) returned NULL, aborting speech\n", speakerNpcID);
+                fprintf(stderr, "[_show_message] resolve_npc(%d) returned NULL (party has partner %d), aborting speech\n",
+                        speakerNpcID, gPlayerData.curPartner);
                 return ApiStatus_DONE1;
             }
 #endif

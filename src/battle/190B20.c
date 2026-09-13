@@ -5,6 +5,9 @@
 #include "script_api/battle.h"
 #include "model.h"
 #include "sprite.h"
+#ifdef PORT
+#include <stdio.h>
+#endif
 
 EvtScript EVS_ShakeBattleCamPitch = {
     Wait(LVar0)
@@ -1511,6 +1514,19 @@ void load_partner_actor(void) {
 
     currentPartner = playerData->curPartner;
     battleStatus->partnerActor = nullptr;
+
+#ifdef PORT
+    // One line per battle saying who is in the party. Battle scripts name the partner
+    // without checking there is one, so a party that has lost its partner shows up as a
+    // crash in whatever the fight does first; this says so before that happens.
+    fprintf(stderr, "[battle] party: partner %d, available", currentPartner);
+    for (i = 0; i < (s32)ARRAY_COUNT(playerData->partners); i++) {
+        if (playerData->partners[i].enabled) {
+            fprintf(stderr, " %d", i);
+        }
+    }
+    fprintf(stderr, "\n");
+#endif
 
     if (currentPartner != PARTNER_NONE) {
         partnerData = &bPartnerDmaTable[currentPartner];

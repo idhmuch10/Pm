@@ -361,6 +361,42 @@ The self-test also names the combiner behind each shader it compiles, which is
 what identified the message box's shader (`id0=d000d328a0000108`) in a device log
 and confirmed the phone compiled the variant it should have.
 
+### Tenth round: the window textures were fine, the picture was stretched
+
+The device ran the window render test at startup and answered both questions it was
+built for. The game's own corner textures ask for a fully opaque fill
+(`fill alpha is 15/15/15/15`), the phone draws the test window correctly
+(all eighteen checks pass on an Adreno 830 under GLES 3.2), and the window drawn with
+the real textures comes out 91% opaque. So neither the window textures nor the way the
+renderer uses them was ever wrong.
+
+The geometry the same line reports is what was wrong: `window 2520x1080, game 2880x2160,
+viewport 2520x1080`. The game is rendered 4:3 and was being drawn across the whole
+window, which on that screen stretched it 1.75x wider than it should be. Message boxes
+and the pause menu are the parts of the picture where that is most obvious, which is why
+they were what got reported. The framebuffer is now placed as the largest rectangle of
+its own shape that fits, so the picture keeps its proportions with bars at the sides.
+
+### Eleventh round: a battle with no partner
+
+The Goomba King fight then crashed on a null pointer inside `UseIdleAnimation`, which
+writes `actor->flags` at offset 0, with the fault address 0 to match. `get_actor()`
+returns null for `ACTOR_PARTNER` only when `battleStatus->partnerActor` is null, and
+`load_partner_actor()` leaves it null only when `gPlayerData.curPartner` is
+`PARTNER_NONE`: the party had no partner. The same session logged
+`resolve_npc(-4) returned NULL` twice in the overworld, which is the same thing seen
+from the other side — the partner NPC is created from the same field.
+
+The fight's opening cutscene turns the partner's idle animation off and has it speak, as
+every battle from that point in the game may, because the original game can only reach
+it with a partner in the party. Over three hundred places dereference what `get_actor()`
+returns without checking, so any of them ends the run in a party state the game does not
+expect. `get_actor()` now hands back a scratch actor with a single empty part instead of
+null and says once per actor which one was missing and which partners the save has
+available; `load_partner_actor()` prints the party at the start of every battle and the
+missing-speaker line in the overworld names it too. That keeps a run alive and makes the
+next report say whether the partner was lost or was never there.
+
 ## Known gaps and next steps
 
 1. **Device testing.** Boot, frame rate, audio latency and heat on real phones.

@@ -1,6 +1,9 @@
 #include "common.h"
 #include "effects.h"
 #include "battle/battle.h"
+#ifdef PORT
+#include <stdio.h>
+#endif
 
 extern s32 IsGroupHeal;
 extern s8 ApplyingBuff;
@@ -152,6 +155,55 @@ void set_actor_home_position(s32 actorID, f32 x, f32 y, f32 z) {
     actor->homePos.z = z;
 }
 
+#ifdef PORT
+/**
+ * PORT: an actor a script asks for that is not in the battle.
+ *
+ * Over three hundred places call get_actor() and dereference what comes back without
+ * checking it, because in the original game a script only ever names an actor that is
+ * there. A party that is missing a partner breaks that: the Goomba King's opening
+ * cutscene turns the partner's idle animation off, and UseIdleAnimation writes through
+ * a null pointer before the fight can start.
+ *
+ * Rather than let one unexpected party state end the run, hand back a scratch actor
+ * with a single empty part, and say once per actor which one was missing and what the
+ * party looked like. It is a shim, not a fix: a battle that reaches this is already in
+ * a state the game does not expect, and the line it prints is what says why.
+ */
+static Actor* port_missing_actor(s32 actorID) {
+    static Actor missingActor;
+    static ActorPart missingPart;
+    static s32 reportedIDs[8];
+    static s32 numReported = 0;
+    PlayerData* playerData = &gPlayerData;
+    s32 i;
+
+    missingActor.actorID = actorID;
+    missingActor.numParts = 1;
+    missingActor.partsTable = &missingPart;
+    missingActor.curHP = 1;
+    missingPart.nextPart = nullptr;
+
+    for (i = 0; i < numReported; i++) {
+        if (reportedIDs[i] == actorID) {
+            return &missingActor;
+        }
+    }
+    if (numReported < (s32)ARRAY_COUNT(reportedIDs)) {
+        reportedIDs[numReported++] = actorID;
+    }
+    fprintf(stderr, "[battle] a script wants actor 0x%X, which is not in this battle; ", actorID);
+    fprintf(stderr, "party is partner %d,", playerData->curPartner);
+    for (i = 0; i < (s32)ARRAY_COUNT(playerData->partners); i++) {
+        if (playerData->partners[i].enabled) {
+            fprintf(stderr, " %d", i);
+        }
+    }
+    fprintf(stderr, " available\n");
+    return &missingActor;
+}
+#endif
+
 Actor* get_actor(s32 actorID) {
     Actor* ret = nullptr;
     BattleStatus* battleStatus = &gBattleStatus;
@@ -169,6 +221,11 @@ Actor* get_actor(s32 actorID) {
             ret = battleStatus->enemyActors[idIdx];
             break;
     }
+#ifdef PORT
+    if (ret == nullptr) {
+        ret = port_missing_actor(actorID);
+    }
+#endif
     return ret;
 }
 

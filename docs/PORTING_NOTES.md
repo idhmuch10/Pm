@@ -391,11 +391,13 @@ The fight's opening cutscene turns the partner's idle animation off and has it s
 every battle from that point in the game may, because the original game can only reach
 it with a partner in the party. Over three hundred places dereference what `get_actor()`
 returns without checking, so any of them ends the run in a party state the game does not
-expect. `get_actor()` now hands back a scratch actor with a single empty part instead of
-null and says once per actor which one was missing and which partners the save has
-available; `load_partner_actor()` prints the party at the start of every battle and the
-missing-speaker line in the overworld names it too. That keeps a run alive and makes the
-next report say whether the partner was lost or was never there.
+expect. `get_actor()` now hands back a scratch actor with a single empty part when the
+party has no partner, and says once which partners the save does have. Only the partner
+is covered: an empty enemy slot is a null on purpose and is how the rest of the battle
+code tells that nothing is there, and `ActorExists` reads `gBattleStatus.partnerActor`
+itself, so it still answers no. `load_partner_actor()` prints the party at the start of
+every battle and the missing-speaker line in the overworld names it too, so the next
+report says whether the partner was lost or was never there.
 
 ## Known gaps and next steps
 

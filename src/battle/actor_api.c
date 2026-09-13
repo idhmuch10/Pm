@@ -157,20 +157,23 @@ void set_actor_home_position(s32 actorID, f32 x, f32 y, f32 z) {
 
 #ifdef PORT
 /**
- * PORT: an actor a script asks for that is not in the battle.
+ * PORT: the partner a script asks for when the party has not got one.
  *
  * Over three hundred places call get_actor() and dereference what comes back without
- * checking it, because in the original game a script only ever names an actor that is
- * there. A party that is missing a partner breaks that: the Goomba King's opening
- * cutscene turns the partner's idle animation off, and UseIdleAnimation writes through
- * a null pointer before the fight can start.
+ * checking it, because in the original game a script only names an actor that is there.
+ * A party missing its partner breaks that: the Goomba King's opening cutscene turns the
+ * partner's idle animation off, and UseIdleAnimation writes through a null pointer
+ * before the fight can start.
  *
- * Rather than let one unexpected party state end the run, hand back a scratch actor
- * with a single empty part, and say once per actor which one was missing and what the
- * party looked like. It is a shim, not a fix: a battle that reaches this is already in
- * a state the game does not expect, and the line it prints is what says why.
+ * Rather than let one unexpected party state end the run, hand back a scratch actor with
+ * a single empty part, and say once which partner was missing and which ones the save
+ * has. Only the partner is covered: an empty enemy slot is a null on purpose and is how
+ * the rest of the battle code tells that nothing is there, and the player is never
+ * missing. ActorExists already reads gBattleStatus.partnerActor itself, so it still
+ * answers no. This is a shim over a state the game does not expect, not a fix for how
+ * the party got into it; the line it prints is what says that.
  */
-static Actor* port_missing_actor(s32 actorID) {
+static Actor* port_missing_partner_actor(s32 actorID) {
     static Actor missingActor;
     static ActorPart missingPart;
     static s32 reportedIDs[8];
@@ -192,8 +195,8 @@ static Actor* port_missing_actor(s32 actorID) {
     if (numReported < (s32)ARRAY_COUNT(reportedIDs)) {
         reportedIDs[numReported++] = actorID;
     }
-    fprintf(stderr, "[battle] a script wants actor 0x%X, which is not in this battle; ", actorID);
-    fprintf(stderr, "party is partner %d,", playerData->curPartner);
+    fprintf(stderr, "[battle] a script wants actor 0x%X, but the party has no partner; ", actorID);
+    fprintf(stderr, "partner is %d,", playerData->curPartner);
     for (i = 0; i < (s32)ARRAY_COUNT(playerData->partners); i++) {
         if (playerData->partners[i].enabled) {
             fprintf(stderr, " %d", i);
@@ -222,8 +225,8 @@ Actor* get_actor(s32 actorID) {
             break;
     }
 #ifdef PORT
-    if (ret == nullptr) {
-        ret = port_missing_actor(actorID);
+    if (ret == nullptr && actorClass == ACTOR_CLASS_PARTNER) {
+        ret = port_missing_partner_actor(actorID);
     }
 #endif
     return ret;
